@@ -2,6 +2,7 @@ package com.sebastianhauss.wayfare.service;
 
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
+import com.sebastianhauss.wayfare.exception.InvalidUrlException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
 import com.sebastianhauss.wayfare.model.ShortUrl;
 import com.sebastianhauss.wayfare.repository.ShortUrlRepository;
@@ -62,6 +63,14 @@ class ShortenUrlServiceTest {
     }
 
     @Test
+    void shorten_throwsInvalidUrl_whenUrlPointsBackToThisService() {
+        assertThatThrownBy(() -> shortenUrlService.shorten(new ShortenRequest("http://localhost:8080/abc123")))
+                .isInstanceOf(InvalidUrlException.class);
+
+        verify(shortUrlRepository, never()).save(any());
+    }
+
+    @Test
     void getUrl_returnsFromCache_onHit() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("abc")).thenReturn("https://example.com");
@@ -96,6 +105,25 @@ class ShortenUrlServiceTest {
         when(shortUrlRepository.findByShortCode("missing")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> shortenUrlService.getUrl("missing"))
+                .isInstanceOf(ShortenCodeNotFoundException.class);
+    }
+
+    @Test
+    void getShortUrl_buildsUrlFromStoredShortCode() {
+        ShortUrl shortUrl = new ShortUrl();
+        shortUrl.setShortCode("abc");
+        when(shortUrlRepository.findByShortCode("abc")).thenReturn(Optional.of(shortUrl));
+
+        String result = shortenUrlService.getShortUrl("abc");
+
+        assertThat(result).isEqualTo("http://localhost:8080/abc");
+    }
+
+    @Test
+    void getShortUrl_throwsNotFound_whenCodeMissing() {
+        when(shortUrlRepository.findByShortCode("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> shortenUrlService.getShortUrl("missing"))
                 .isInstanceOf(ShortenCodeNotFoundException.class);
     }
 }
