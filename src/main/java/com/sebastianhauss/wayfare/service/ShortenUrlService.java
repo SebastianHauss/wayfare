@@ -3,6 +3,7 @@ package com.sebastianhauss.wayfare.service;
 import com.sebastianhauss.wayfare.config.RedisConfig;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
+import com.sebastianhauss.wayfare.exception.InvalidUrlException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
 import com.sebastianhauss.wayfare.model.ShortUrl;
 import com.sebastianhauss.wayfare.repository.ShortUrlRepository;
@@ -30,6 +31,9 @@ public class ShortenUrlService {
 
     @Transactional
     public ShortenResponse shorten(ShortenRequest request) {
+        if (request.url().startsWith(baseUrl)) {
+            throw new InvalidUrlException("Cannot shorten a URL that points back to this service");
+        }
         ShortUrl shortUrl = new ShortUrl();
         shortUrl.setOriginalUrl(request.url());
         ShortUrl saved = shortUrlRepository.save(shortUrl);
