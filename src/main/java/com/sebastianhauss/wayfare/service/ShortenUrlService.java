@@ -1,9 +1,9 @@
 package com.sebastianhauss.wayfare.service;
 
-import com.sebastianhauss.wayfare.config.RedisConfig;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
+import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
 import com.sebastianhauss.wayfare.model.ShortUrl;
 import com.sebastianhauss.wayfare.repository.ShortUrlRepository;
@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 @Service
@@ -36,6 +37,8 @@ public class ShortenUrlService {
         }
         ShortUrl shortUrl = new ShortUrl();
         shortUrl.setOriginalUrl(request.url());
+        shortUrl.setExpiresAt(request.expiresAt());
+        shortUrl.setMaxClicks(request.maxClicks());
         ShortUrl saved = shortUrlRepository.save(shortUrl);
         String shortCode = Base62Encoder.encode(saved.getId());
         saved.setShortCode(shortCode);
@@ -55,15 +58,28 @@ public class ShortenUrlService {
         }
         Optional<ShortUrl> shortUrl = shortUrlRepository.findByShortCode(code);
         if (shortUrl.isPresent()) {
+            ShortUrl entity = shortUrl.get();
+            if (isExpired(entity)) {
+                throw new LinkExpiredException("Link expired");
+            }
             log.debug("Cache miss for code={}, fetched from database", code);
-            String originalUrl = shortUrl.get().getOriginalUrl();
-            redisTemplate.opsForValue().set(code, originalUrl, Duration.ofHours(24));
+            String originalUrl = entity.getOriginalUrl();
+            boolean hasExpiration = entity.getExpiresAt() != null || entity.getMaxClicks() != null;
+            if (!hasExpiration) {
+                redisTemplate.opsForValue().set(code, originalUrl, Duration.ofHours(24));
+            }
             shortUrlRepository.incrementClickCount(code);
             return originalUrl;
         } else {
             log.warn("Short code not found: {}", code);
             throw new ShortenCodeNotFoundException("Short code not found");
         }
+    }
+
+    private boolean isExpired(ShortUrl entity) {
+        boolean expiredByDate = entity.getExpiresAt() != null && entity.getExpiresAt().isBefore(Instant.now());
+        boolean expiredByClicks = entity.getMaxClicks() != null && entity.getClickCount() >= entity.getMaxClicks();
+        return expiredByDate || expiredByClicks;
     }
 
     @Transactional

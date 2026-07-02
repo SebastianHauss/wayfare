@@ -27,4 +27,8 @@ public class ShortUrl {
     private Instant createdAt;
 
     private Long clickCount = 0L;
+
+    private Instant expiresAt;
+
+    private Long maxClicks;
 }

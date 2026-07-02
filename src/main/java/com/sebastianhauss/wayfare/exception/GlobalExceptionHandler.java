@@ -35,4 +35,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ErrorResponse(ex.getMessage()));
     }
+
+    @ExceptionHandler(LinkExpiredException.class)
+    public ResponseEntity<ErrorResponse> handleExpired(LinkExpiredException ex) {
+        log.warn("Expired link accessed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.GONE).body(new ErrorResponse(ex.getMessage()));
+    }
 }

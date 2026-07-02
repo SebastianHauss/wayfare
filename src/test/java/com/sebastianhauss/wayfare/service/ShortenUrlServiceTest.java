@@ -3,6 +3,7 @@ package com.sebastianhauss.wayfare.service;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
+import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
 import com.sebastianhauss.wayfare.model.ShortUrl;
 import com.sebastianhauss.wayfare.repository.ShortUrlRepository;
@@ -16,6 +17,7 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -96,6 +98,69 @@ class ShortenUrlServiceTest {
         assertThat(result).isEqualTo("https://example.com");
         verify(valueOperations).set(eq("abc"), eq("https://example.com"), eq(Duration.ofHours(24)));
         verify(shortUrlRepository).incrementClickCount("abc");
+    }
+
+    @Test
+    void getUrl_throwsExpired_whenExpiresAtIsInThePast() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("abc")).thenReturn(null);
+
+        ShortUrl shortUrl = new ShortUrl();
+        shortUrl.setOriginalUrl("https://example.com");
+        shortUrl.setExpiresAt(Instant.now().minusSeconds(60));
+        when(shortUrlRepository.findByShortCode("abc")).thenReturn(Optional.of(shortUrl));
+
+        assertThatThrownBy(() -> shortenUrlService.getUrl("abc"))
+                .isInstanceOf(LinkExpiredException.class);
+        verify(shortUrlRepository, never()).incrementClickCount(any());
+    }
+
+    @Test
+    void getUrl_stillWorks_whenExpiresAtIsInTheFuture() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("abc")).thenReturn(null);
+
+        ShortUrl shortUrl = new ShortUrl();
+        shortUrl.setOriginalUrl("https://example.com");
+        shortUrl.setExpiresAt(Instant.now().plusSeconds(60));
+        when(shortUrlRepository.findByShortCode("abc")).thenReturn(Optional.of(shortUrl));
+
+        String result = shortenUrlService.getUrl("abc");
+
+        assertThat(result).isEqualTo("https://example.com");
+        verify(shortUrlRepository).incrementClickCount("abc");
+    }
+
+    @Test
+    void getUrl_throwsExpired_whenMaxClicksReached() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("abc")).thenReturn(null);
+
+        ShortUrl shortUrl = new ShortUrl();
+        shortUrl.setOriginalUrl("https://example.com");
+        shortUrl.setMaxClicks(5L);
+        shortUrl.setClickCount(5L);
+        when(shortUrlRepository.findByShortCode("abc")).thenReturn(Optional.of(shortUrl));
+
+        assertThatThrownBy(() -> shortenUrlService.getUrl("abc"))
+                .isInstanceOf(LinkExpiredException.class);
+        verify(shortUrlRepository, never()).incrementClickCount(any());
+    }
+
+    @Test
+    void getUrl_doesNotCache_whenLinkHasExpirationConfigured() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("abc")).thenReturn(null);
+
+        ShortUrl shortUrl = new ShortUrl();
+        shortUrl.setOriginalUrl("https://example.com");
+        shortUrl.setMaxClicks(5L);
+        shortUrl.setClickCount(1L);
+        when(shortUrlRepository.findByShortCode("abc")).thenReturn(Optional.of(shortUrl));
+
+        shortenUrlService.getUrl("abc");
+
+        verify(valueOperations, never()).set(any(), any(), any(Duration.class));
     }
 
     @Test
