@@ -1,0 +1,24 @@
+meta {
+  name: QR Code
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/{{shortCode}}/qr
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: eq image/png
+}
+
+docs {
+  Requires {{shortCode}} to be set — run "Shorten URL - Valid" first.
+
+  Returns a PNG QR code encoding the short URL (not the original long URL),
+  so scanning it still routes through the redirect endpoint and counts
+  clicks normally.
+}

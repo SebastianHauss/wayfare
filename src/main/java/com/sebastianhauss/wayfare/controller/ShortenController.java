@@ -3,9 +3,11 @@ package com.sebastianhauss.wayfare.controller;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.service.ShortenUrlService;
+import com.sebastianhauss.wayfare.util.QrCodeGenerator;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,5 +30,14 @@ public class ShortenController {
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(originalUrl))
                 .build();
+    }
+
+    @GetMapping("/{code}/qr")
+    public ResponseEntity<byte[]> getQrCode(@PathVariable String code) {
+        String shortUrl = shortenUrlService.getShortUrl(code);
+        byte[] png = QrCodeGenerator.generate(shortUrl, 300);
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .body(png);
     }
 }

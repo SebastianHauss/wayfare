@@ -57,4 +57,11 @@ public class ShortenUrlService {
            throw new ShortenCodeNotFoundException("Short code not found");
        }
     }
+
+    @Transactional
+    public String getShortUrl(String code) {
+        ShortUrl shortUrl = shortUrlRepository.findByShortCode(code)
+                .orElseThrow(() -> new ShortenCodeNotFoundException("Short code not found"));
+        return baseUrl + "/" + shortUrl.getShortCode();
+    }
 }
