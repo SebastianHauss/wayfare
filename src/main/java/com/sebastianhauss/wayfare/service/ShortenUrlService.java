@@ -37,25 +37,29 @@ public class ShortenUrlService {
         saved.setShortCode(shortCode);
         ShortUrl updated = shortUrlRepository.save(saved);
         String shortUrlString = baseUrl + "/" + updated.getShortCode();
+        log.info("Created short URL: {} -> {}", updated.getShortCode(), updated.getOriginalUrl());
         return new ShortenResponse(updated.getShortCode(), shortUrlString, updated.getOriginalUrl());
     }
 
     @Transactional
     public String getUrl(String code) {
-       String hit = redisTemplate.opsForValue().get(code);
-       if (hit != null) {
-           shortUrlRepository.incrementClickCount(code);
-           return hit;
-       }
-       Optional<ShortUrl> shortUrl = shortUrlRepository.findByShortCode(code);
-       if (shortUrl.isPresent()) {
-           String originalUrl = shortUrl.get().getOriginalUrl();
-           redisTemplate.opsForValue().set(code, originalUrl, Duration.ofHours(24));
-           shortUrlRepository.incrementClickCount(code);
-           return originalUrl;
-       } else {
-           throw new ShortenCodeNotFoundException("Short code not found");
-       }
+        String hit = redisTemplate.opsForValue().get(code);
+        if (hit != null) {
+            log.debug("Cache hit for code={}", code);
+            shortUrlRepository.incrementClickCount(code);
+            return hit;
+        }
+        Optional<ShortUrl> shortUrl = shortUrlRepository.findByShortCode(code);
+        if (shortUrl.isPresent()) {
+            log.debug("Cache miss for code={}, fetched from database", code);
+            String originalUrl = shortUrl.get().getOriginalUrl();
+            redisTemplate.opsForValue().set(code, originalUrl, Duration.ofHours(24));
+            shortUrlRepository.incrementClickCount(code);
+            return originalUrl;
+        } else {
+            log.warn("Short code not found: {}", code);
+            throw new ShortenCodeNotFoundException("Short code not found");
+        }
     }
 
     @Transactional

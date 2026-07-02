@@ -5,6 +5,7 @@ import com.sebastianhauss.wayfare.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -15,6 +16,7 @@ import java.time.Duration;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class RateLimitInterceptor implements HandlerInterceptor {
 
     private static final int LIMIT = 10;
@@ -25,7 +27,8 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        String key = "ratelimit:" + clientIp(request);
+        String clientIp = clientIp(request);
+        String key = "ratelimit:" + clientIp;
 
         Long count = redisTemplate.opsForValue().increment(key);
         if (count != null && count == 1L) {
@@ -33,6 +36,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         }
 
         if (count != null && count > LIMIT) {
+            log.warn("Rate limit exceeded for IP={}", clientIp);
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(objectMapper.writeValueAsString(
