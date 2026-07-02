@@ -1,13 +1,6 @@
 spring:
-  datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/wayfare}
-    username: ${DB_USERNAME:wayfare}
-    password: ${DB_PASSWORD:wayfare}
-
-  data:
-    redis:
-      host: localhost
-      port: 6379
+  profiles:
+    active: local
 
   jpa:
     hibernate:
@@ -16,6 +9,3 @@ spring:
 
   flyway:
     enabled: true
-
-app:
-  base-url: http://localhost:8080
