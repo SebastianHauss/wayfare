@@ -1,0 +1,35 @@
+meta {
+  name: Shorten URL - Valid
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/shorten
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "url": "https://example.com/some/long/path"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("shortCode", res.body.shortCode);
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.shortCode: isString
+  res.body.shortUrl: isString
+  res.body.originalUrl: eq https://example.com/some/long/path
+}
+
+docs {
+  Happy path. Saves the returned shortCode into the {{shortCode}} variable so
+  the redirect requests below can reuse it — run this one first.
+}

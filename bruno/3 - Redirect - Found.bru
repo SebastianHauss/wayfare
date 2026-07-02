@@ -1,0 +1,30 @@
+meta {
+  name: Redirect - Found
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/{{shortCode}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 302
+  res.headers.location: eq https://example.com/some/long/path
+}
+
+settings {
+  encodeUrl: false
+  timeout: 0
+  followRedirects: false
+}
+
+docs {
+  Requires {{shortCode}} to be set — run "Shorten URL - Valid" first.
+  
+  followRedirects is disabled so this checks the actual 302 + Location
+  header Wayfare returns, instead of following the link all the way to
+  example.com.
+}
