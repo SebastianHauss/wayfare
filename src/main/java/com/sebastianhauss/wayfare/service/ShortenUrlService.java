@@ -35,17 +35,17 @@ public class ShortenUrlService {
         if (request.url().startsWith(baseUrl)) {
             throw new InvalidUrlException("Cannot shorten a URL that points back to this service");
         }
-        Long id = shortUrlRepository.nextId();
         ShortUrl shortUrl = new ShortUrl();
-        shortUrl.setId(id);
-        shortUrl.setShortCode(Base62Encoder.encode(id));
         shortUrl.setOriginalUrl(request.url());
         shortUrl.setExpiresAt(request.expiresAt());
         shortUrl.setMaxClicks(request.maxClicks());
         ShortUrl saved = shortUrlRepository.save(shortUrl);
-        String shortUrlString = baseUrl + "/" + saved.getShortCode();
-        log.info("Created short URL: {} -> {}", saved.getShortCode(), saved.getOriginalUrl());
-        return new ShortenResponse(saved.getShortCode(), shortUrlString, saved.getOriginalUrl());
+        String shortCode = Base62Encoder.encode(saved.getId());
+        saved.setShortCode(shortCode);
+        ShortUrl updated = shortUrlRepository.save(saved);
+        String shortUrlString = baseUrl + "/" + updated.getShortCode();
+        log.info("Created short URL: {} -> {}", updated.getShortCode(), updated.getOriginalUrl());
+        return new ShortenResponse(updated.getShortCode(), shortUrlString, updated.getOriginalUrl());
     }
 
     @Transactional
