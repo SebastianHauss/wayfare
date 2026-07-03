@@ -18,9 +18,9 @@ class ShortUrlRepositoryTest {
     @Test
     void incrementClickCount_atomicallyBumpsCountByOne() {
         ShortUrl url = new ShortUrl();
-        url.setOriginalUrl("https://example.com/some/long/path");
-        url = repository.saveAndFlush(url);
+        url.setId(repository.nextId());
         url.setShortCode("abc123");
+        url.setOriginalUrl("https://example.com/some/long/path");
         repository.saveAndFlush(url);
 
         repository.incrementClickCount("abc123");

@@ -51,17 +51,15 @@ class ShortenUrlServiceTest {
 
     @Test
     void shorten_encodesIdAndBuildsShortUrl() {
-        ShortUrl saved = new ShortUrl();
-        saved.setId(5L);
-        saved.setOriginalUrl("https://example.com/some/long/path");
-        when(shortUrlRepository.save(any(ShortUrl.class))).thenReturn(saved);
+        when(shortUrlRepository.nextId()).thenReturn(5L);
+        when(shortUrlRepository.save(any(ShortUrl.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ShortenResponse response = shortenUrlService.shorten(new ShortenRequest("https://example.com/some/long/path"));
 
         assertThat(response.shortCode()).isEqualTo("5");
         assertThat(response.shortUrl()).isEqualTo("http://localhost:8080/5");
         assertThat(response.originalUrl()).isEqualTo("https://example.com/some/long/path");
-        verify(shortUrlRepository, times(2)).save(any(ShortUrl.class));
+        verify(shortUrlRepository, times(1)).save(any(ShortUrl.class));
     }
 
     @Test
@@ -69,6 +67,7 @@ class ShortenUrlServiceTest {
         assertThatThrownBy(() -> shortenUrlService.shorten(new ShortenRequest("http://localhost:8080/abc123")))
                 .isInstanceOf(InvalidUrlException.class);
 
+        verify(shortUrlRepository, never()).nextId();
         verify(shortUrlRepository, never()).save(any());
     }
 
