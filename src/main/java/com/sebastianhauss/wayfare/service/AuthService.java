@@ -2,11 +2,13 @@ package com.sebastianhauss.wayfare.service;
 
 import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
+import com.sebastianhauss.wayfare.dto.MeResponse;
 import com.sebastianhauss.wayfare.dto.RefreshRequest;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
 import com.sebastianhauss.wayfare.exception.EmailAlreadyInUseException;
 import com.sebastianhauss.wayfare.exception.InvalidCredentialsException;
 import com.sebastianhauss.wayfare.exception.InvalidRefreshTokenException;
+import com.sebastianhauss.wayfare.exception.UserNotFoundException;
 import com.sebastianhauss.wayfare.model.RefreshToken;
 import com.sebastianhauss.wayfare.model.User;
 import com.sebastianhauss.wayfare.repository.RefreshTokenRepository;
@@ -14,6 +16,8 @@ import com.sebastianhauss.wayfare.repository.UserRepository;
 import com.sebastianhauss.wayfare.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,6 +75,15 @@ public class AuthService {
             token.setRevoked(true);
             refreshTokenRepository.save(token);
         });
+    }
+
+    @Transactional(readOnly = true)
+    public MeResponse getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Long userId = authentication != null && authentication.getPrincipal() instanceof Long id ? id : null;
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User no longer exists"));
+        return new MeResponse(user.getId(), user.getEmail(), user.getCreatedAt());
     }
 
     private RefreshToken validRefreshToken(String rawToken) {

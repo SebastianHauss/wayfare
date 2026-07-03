@@ -84,4 +84,13 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody().error()).isEqualTo("Refresh token is invalid or has been revoked");
     }
+
+    @Test
+    void handleUserNotFound_returns404WithMessage() {
+        ResponseEntity<ErrorResponse> response = handler.handleUserNotFound(
+                new UserNotFoundException("User no longer exists"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().error()).isEqualTo("User no longer exists");
+    }
 }

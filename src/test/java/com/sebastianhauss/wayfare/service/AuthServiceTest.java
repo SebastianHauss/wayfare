@@ -2,22 +2,27 @@ package com.sebastianhauss.wayfare.service;
 
 import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
+import com.sebastianhauss.wayfare.dto.MeResponse;
 import com.sebastianhauss.wayfare.dto.RefreshRequest;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
 import com.sebastianhauss.wayfare.exception.EmailAlreadyInUseException;
 import com.sebastianhauss.wayfare.exception.InvalidCredentialsException;
 import com.sebastianhauss.wayfare.exception.InvalidRefreshTokenException;
+import com.sebastianhauss.wayfare.exception.UserNotFoundException;
 import com.sebastianhauss.wayfare.model.RefreshToken;
 import com.sebastianhauss.wayfare.model.User;
 import com.sebastianhauss.wayfare.repository.RefreshTokenRepository;
 import com.sebastianhauss.wayfare.repository.UserRepository;
 import com.sebastianhauss.wayfare.security.JwtService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
@@ -51,6 +56,11 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         authService = new AuthService(userRepository, refreshTokenRepository, passwordEncoder, jwtService);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -197,5 +207,31 @@ class AuthServiceTest {
         authService.logout(new RefreshRequest("raw-token"));
 
         verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void getCurrentUser_returnsMappedUser_forAuthenticatedPrincipal() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(7L, null, java.util.List.of()));
+
+        User user = new User();
+        user.setId(7L);
+        user.setEmail("user@example.com");
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+
+        MeResponse response = authService.getCurrentUser();
+
+        assertThat(response.id()).isEqualTo(7L);
+        assertThat(response.email()).isEqualTo("user@example.com");
+    }
+
+    @Test
+    void getCurrentUser_throws_whenUserNoLongerExists() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(7L, null, java.util.List.of()));
+        when(userRepository.findById(7L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.getCurrentUser())
+                .isInstanceOf(UserNotFoundException.class);
     }
 }

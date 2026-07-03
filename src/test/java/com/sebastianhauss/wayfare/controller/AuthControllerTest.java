@@ -2,6 +2,7 @@ package com.sebastianhauss.wayfare.controller;
 
 import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
+import com.sebastianhauss.wayfare.dto.MeResponse;
 import com.sebastianhauss.wayfare.dto.RefreshRequest;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
 import com.sebastianhauss.wayfare.service.AuthService;
@@ -74,5 +75,16 @@ class AuthControllerTest {
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         verify(authService).logout(request);
+    }
+
+    @Test
+    void me_returnsOkWithCurrentUser() {
+        MeResponse response = new MeResponse(1L, "user@example.com", null);
+        when(authService.getCurrentUser()).thenReturn(response);
+
+        ResponseEntity<MeResponse> result = authController.me();
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).isEqualTo(response);
     }
 }

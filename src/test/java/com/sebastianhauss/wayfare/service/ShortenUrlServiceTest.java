@@ -1,5 +1,6 @@
 package com.sebastianhauss.wayfare.service;
 
+import com.sebastianhauss.wayfare.dto.LinkResponse;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
@@ -22,6 +23,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -228,5 +230,52 @@ class ShortenUrlServiceTest {
 
         assertThatThrownBy(() -> shortenUrlService.getShortUrl("missing"))
                 .isInstanceOf(ShortenCodeNotFoundException.class);
+    }
+
+    @Test
+    void getMyLinks_returnsMappedLinksForCurrentUser() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
+
+        ShortUrl shortUrl = new ShortUrl();
+        shortUrl.setShortCode("abc");
+        shortUrl.setOriginalUrl("https://example.com");
+        shortUrl.setClickCount(3L);
+        when(shortUrlRepository.findByUserIdOrderByCreatedAtDesc(42L)).thenReturn(List.of(shortUrl));
+
+        List<LinkResponse> result = shortenUrlService.getMyLinks();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).shortCode()).isEqualTo("abc");
+        assertThat(result.get(0).shortUrl()).isEqualTo("http://localhost:8080/abc");
+        assertThat(result.get(0).originalUrl()).isEqualTo("https://example.com");
+        assertThat(result.get(0).clickCount()).isEqualTo(3L);
+    }
+
+    @Test
+    void deleteLink_deletesLinkAndEvictsCache_whenOwnedByCurrentUser() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
+
+        ShortUrl shortUrl = new ShortUrl();
+        shortUrl.setShortCode("abc");
+        when(shortUrlRepository.findByShortCodeAndUserId("abc", 42L)).thenReturn(Optional.of(shortUrl));
+
+        shortenUrlService.deleteLink("abc");
+
+        verify(shortUrlRepository).delete(shortUrl);
+        verify(redisTemplate).delete("abc");
+    }
+
+    @Test
+    void deleteLink_throwsNotFound_whenNotOwnedByCurrentUser() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
+
+        when(shortUrlRepository.findByShortCodeAndUserId("abc", 42L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> shortenUrlService.deleteLink("abc"))
+                .isInstanceOf(ShortenCodeNotFoundException.class);
+        verify(shortUrlRepository, never()).delete(any());
     }
 }

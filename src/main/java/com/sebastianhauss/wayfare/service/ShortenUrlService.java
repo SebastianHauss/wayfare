@@ -1,5 +1,6 @@
 package com.sebastianhauss.wayfare.service;
 
+import com.sebastianhauss.wayfare.dto.LinkResponse;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -77,6 +79,36 @@ public class ShortenUrlService {
             log.warn("Short code not found: {}", code);
             throw new ShortenCodeNotFoundException("Short code not found");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<LinkResponse> getMyLinks() {
+        Long userId = currentUserId();
+        return shortUrlRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(this::toLinkResponse)
+                .toList();
+    }
+
+    @Transactional
+    public void deleteLink(String code) {
+        Long userId = currentUserId();
+        ShortUrl shortUrl = shortUrlRepository.findByShortCodeAndUserId(code, userId)
+                .orElseThrow(() -> new ShortenCodeNotFoundException("Short code not found"));
+        shortUrlRepository.delete(shortUrl);
+        redisTemplate.delete(code);
+        log.info("Deleted short URL: {}", code);
+    }
+
+    private LinkResponse toLinkResponse(ShortUrl shortUrl) {
+        return new LinkResponse(
+                shortUrl.getShortCode(),
+                baseUrl + "/" + shortUrl.getShortCode(),
+                shortUrl.getOriginalUrl(),
+                shortUrl.getCreatedAt(),
+                shortUrl.getClickCount(),
+                shortUrl.getExpiresAt(),
+                shortUrl.getMaxClicks()
+        );
     }
 
     private Long currentUserId() {

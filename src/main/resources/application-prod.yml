@@ -19,6 +19,7 @@ spring:
 
 app:
   base-url: ${APP_BASE_URL}
+  allowed-origins: ${ALLOWED_ORIGINS}
 
 jwt:
   secret: ${JWT_SECRET}

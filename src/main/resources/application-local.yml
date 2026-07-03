@@ -11,6 +11,7 @@ spring:
 
 app:
   base-url: http://localhost:8080
+  allowed-origins: http://localhost:5173,http://localhost:3000
 
 jwt:
   secret: local-dev-secret-do-not-use-in-production-01234567
