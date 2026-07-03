@@ -7,13 +7,17 @@ import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
 import com.sebastianhauss.wayfare.model.ShortUrl;
 import com.sebastianhauss.wayfare.repository.ShortUrlRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
@@ -49,6 +53,11 @@ class ShortenUrlServiceTest {
         ReflectionTestUtils.setField(shortenUrlService, "baseUrl", "http://localhost:8080");
     }
 
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     void shorten_encodesIdAndBuildsShortUrl() {
         ShortUrl saved = new ShortUrl();
@@ -70,6 +79,35 @@ class ShortenUrlServiceTest {
                 .isInstanceOf(InvalidUrlException.class);
 
         verify(shortUrlRepository, never()).save(any());
+    }
+
+    @Test
+    void shorten_leavesUserIdNull_whenAnonymous() {
+        ShortUrl saved = new ShortUrl();
+        saved.setId(5L);
+        when(shortUrlRepository.save(any(ShortUrl.class))).thenReturn(saved);
+
+        shortenUrlService.shorten(new ShortenRequest("https://example.com"));
+
+        ArgumentCaptor<ShortUrl> captor = ArgumentCaptor.forClass(ShortUrl.class);
+        verify(shortUrlRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0).getUserId()).isNull();
+    }
+
+    @Test
+    void shorten_setsUserId_whenAuthenticated() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
+
+        ShortUrl saved = new ShortUrl();
+        saved.setId(5L);
+        when(shortUrlRepository.save(any(ShortUrl.class))).thenReturn(saved);
+
+        shortenUrlService.shorten(new ShortenRequest("https://example.com"));
+
+        ArgumentCaptor<ShortUrl> captor = ArgumentCaptor.forClass(ShortUrl.class);
+        verify(shortUrlRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0).getUserId()).isEqualTo(42L);
     }
 
     @Test

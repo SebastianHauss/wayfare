@@ -1,0 +1,32 @@
+meta {
+  name: Shorten URL - Authenticated
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/shorten
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "url": "https://example.com/owned/by/a/user"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.shortCode: isString
+}
+
+docs {
+  Same endpoint as request 1, but with an access token attached — the created
+  link gets an owner (user_id column) instead of staying anonymous. Run
+  Register or Login first so {{accessToken}} is set.
+}

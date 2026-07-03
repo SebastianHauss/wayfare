@@ -57,4 +57,31 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().error()).isEqualTo("url: must match \"^https?://.+\"");
     }
+
+    @Test
+    void handleEmailAlreadyInUse_returns409WithMessage() {
+        ResponseEntity<ErrorResponse> response = handler.handleEmailAlreadyInUse(
+                new EmailAlreadyInUseException("Email already in use: a@b.com"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().error()).isEqualTo("Email already in use: a@b.com");
+    }
+
+    @Test
+    void handleInvalidCredentials_returns401WithMessage() {
+        ResponseEntity<ErrorResponse> response = handler.handleInvalidCredentials(
+                new InvalidCredentialsException("Invalid email or password"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody().error()).isEqualTo("Invalid email or password");
+    }
+
+    @Test
+    void handleInvalidRefreshToken_returns401WithMessage() {
+        ResponseEntity<ErrorResponse> response = handler.handleInvalidRefreshToken(
+                new InvalidRefreshTokenException("Refresh token is invalid or has been revoked"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody().error()).isEqualTo("Refresh token is invalid or has been revoked");
+    }
 }

@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +41,7 @@ public class ShortenUrlService {
         shortUrl.setOriginalUrl(request.url());
         shortUrl.setExpiresAt(request.expiresAt());
         shortUrl.setMaxClicks(request.maxClicks());
+        shortUrl.setUserId(currentUserId());
         ShortUrl saved = shortUrlRepository.save(shortUrl);
         String shortCode = Base62Encoder.encode(saved.getId());
         saved.setShortCode(shortCode);
@@ -74,6 +77,11 @@ public class ShortenUrlService {
             log.warn("Short code not found: {}", code);
             throw new ShortenCodeNotFoundException("Short code not found");
         }
+    }
+
+    private Long currentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getPrincipal() instanceof Long userId ? userId : null;
     }
 
     private boolean isExpired(ShortUrl entity) {

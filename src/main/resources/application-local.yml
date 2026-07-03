@@ -12,6 +12,11 @@ spring:
 app:
   base-url: http://localhost:8080
 
+jwt:
+  secret: local-dev-secret-do-not-use-in-production-01234567
+  access-token-expiration: 900
+  refresh-token-expiration: 2592000
+
 logging:
   level:
     com.sebastianhauss.wayfare: DEBUG

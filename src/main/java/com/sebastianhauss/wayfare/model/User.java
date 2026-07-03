@@ -8,29 +8,21 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.Instant;
 
 @Entity
-@Table(name = "short_urls")
+@Table(name = "users")
 @Getter
 @Setter
-public class ShortUrl {
+public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(length = 16, unique = true)
-    private String shortCode;
+    @Column(length = 255, unique = true, nullable = false)
+    private String email;
 
-    @Column(length = 2048, nullable = false)
-    private String originalUrl;
+    @Column(length = 60, nullable = false)
+    private String passwordHash;
 
     @CreationTimestamp
     private Instant createdAt;
-
-    private Long clickCount = 0L;
-
-    private Instant expiresAt;
-
-    private Long maxClicks;
-
-    private Long userId;
 }
