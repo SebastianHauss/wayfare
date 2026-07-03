@@ -3,12 +3,17 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      connection-timeout: 10000
+      initialization-fail-timeout: 10000
 
   data:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
       password: ${REDIS_PASSWORD}
+      connect-timeout: 5s
+      timeout: 5s
       ssl:
         enabled: ${REDIS_SSL_ENABLED:true}
 
