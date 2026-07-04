@@ -1,5 +1,6 @@
 import * as api from './api';
 import type { MeResponse } from './types';
+import { GitHubIcon } from './Icons';
 
 type OAuthProvider = {
   id: 'google' | 'github';
@@ -9,8 +10,8 @@ type OAuthProvider = {
 };
 
 const providers: OAuthProvider[] = [
-  { id: 'google', label: 'Continue with Google', mark: 'G', markClassName: 'text-[#4285f4]' },
-  { id: 'github', label: 'Continue with GitHub', mark: 'GH', markClassName: 'bg-ink text-[10px] text-white' },
+  { id: 'google', label: 'Continue with Google', mark: 'G', markClassName: 'bg-white text-[#4285f4]' },
+  { id: 'github', label: 'Continue with GitHub', mark: '', markClassName: 'bg-ink text-white' },
 ];
 
 export function AuthScreen({
@@ -56,9 +57,9 @@ export function AuthScreen({
                 className="flex w-full items-center justify-center gap-3 rounded-full border border-ink/15 bg-white px-4 py-2.5 text-sm font-medium text-ink shadow-sm transition hover:border-orange hover:text-orange"
               >
                 <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full bg-white font-display font-bold ${provider.markClassName}`}
+                  className={`flex h-5 w-5 items-center justify-center rounded-full font-display font-bold ${provider.markClassName}`}
                 >
-                  {provider.mark}
+                  {provider.id === 'github' ? <GitHubIcon className="h-3.5 w-3.5" /> : provider.mark}
                 </span>
                 {provider.label}
               </button>
