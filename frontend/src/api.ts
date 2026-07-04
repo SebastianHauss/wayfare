@@ -1,4 +1,4 @@
-import type { AuthResponse, LinkResponse, MeResponse, MessageResponse } from './types';
+import type { AuthResponse, LinkResponse, MeResponse } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -32,6 +32,20 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
     this.code = code;
+  }
+}
+
+export function getOAuthUrl(provider: 'google' | 'github') {
+  return `${API_BASE_URL}/oauth2/authorization/${provider}`;
+}
+
+export async function completeOAuthLogin(accessToken: string, refreshToken: string): Promise<MeResponse> {
+  setSession({ accessToken, refreshToken, tokenType: 'Bearer', expiresIn: 0 });
+  try {
+    return await request<MeResponse>('/api/auth/me');
+  } catch (error) {
+    clearSession();
+    throw error;
   }
 }
 
@@ -78,47 +92,6 @@ async function refresh(): Promise<boolean> {
   return true;
 }
 
-export async function login(email: string, password: string): Promise<MeResponse> {
-  const auth = await request<AuthResponse>('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  });
-  setSession(auth);
-  return request<MeResponse>('/api/auth/me');
-}
-
-export function register(email: string, password: string): Promise<MessageResponse> {
-  return request<MessageResponse>('/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  });
-}
-
-export async function verifyEmail(token: string): Promise<MeResponse> {
-  const auth = await request<AuthResponse>('/api/auth/verify-email', {
-    method: 'POST',
-    body: JSON.stringify({ token }),
-  });
-  setSession(auth);
-  return request<MeResponse>('/api/auth/me');
-}
-
-export function resendVerification(email: string): Promise<MessageResponse> {
-  return request<MessageResponse>('/api/auth/resend-verification', {
-    method: 'POST',
-    body: JSON.stringify({ email }),
-  });
-}
-
-export async function reactivate(email: string, password: string): Promise<MeResponse> {
-  const auth = await request<AuthResponse>('/api/auth/reactivate', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  });
-  setSession(auth);
-  return request<MeResponse>('/api/auth/me');
-}
-
 export async function logout(): Promise<void> {
   const refreshToken = getRefreshToken();
   try {
@@ -158,11 +131,12 @@ export function deleteLink(shortCode: string): Promise<void> {
   return request<void>(`/api/links/${shortCode}`, { method: 'DELETE' });
 }
 
-export async function deleteAccount(password: string): Promise<void> {
-  await request<void>('/api/auth/me', {
-    method: 'DELETE',
-    body: JSON.stringify({ password }),
-  });
+export function getQrCodeUrl(link: LinkResponse): string {
+  return `${link.shortUrl.replace(/\/$/, '')}/qr`;
+}
+
+export async function deleteAccount(): Promise<void> {
+  await request<void>('/api/auth/me', { method: 'DELETE' });
   clearSession();
 }
 

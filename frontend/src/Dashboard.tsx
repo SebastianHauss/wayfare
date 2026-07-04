@@ -25,9 +25,9 @@ export function Dashboard({
   const [shortening, setShortening] = useState(false);
   const [shortenError, setShortenError] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [qrLink, setQrLink] = useState<LinkResponse | null>(null);
   const [scrollY, setScrollY] = useState(0);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
-  const [deletePassword, setDeletePassword] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState('');
 
@@ -101,7 +101,7 @@ export function Dashboard({
     setDeletingAccount(true);
     setDeleteAccountError('');
     try {
-      await api.deleteAccount(deletePassword);
+      await api.deleteAccount();
       onAccountDeleted();
     } catch (err) {
       setDeleteAccountError(err instanceof Error ? err.message : 'Something went wrong');
@@ -249,12 +249,18 @@ export function Dashboard({
                     {new Date(link.createdAt).toLocaleDateString()}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2 text-sm">
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm">
                   <button
                     onClick={() => handleCopy(link.shortUrl, link.shortCode)}
                     className="rounded-full border border-ink/15 px-3 py-1 text-ink-soft transition hover:border-orange hover:text-orange"
                   >
                     {copiedCode === link.shortCode ? 'Copied' : 'Copy'}
+                  </button>
+                  <button
+                    onClick={() => setQrLink(link)}
+                    className="rounded-full border border-ink/15 px-3 py-1 text-ink-soft transition hover:border-orange hover:text-orange"
+                  >
+                    QR
                   </button>
                   {user ? (
                     <button
@@ -277,6 +283,48 @@ export function Dashboard({
           </ul>
         )}
 
+        {qrLink && (
+          <div
+            className="fixed inset-0 z-30 flex items-center justify-center bg-ink/35 px-4 py-8 backdrop-blur-sm"
+            onClick={() => setQrLink(null)}
+          >
+            <div
+              className="w-full max-w-xs rounded-2xl border border-ink/10 bg-cream-card p-5 text-center shadow-2xl shadow-ink/20"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto flex h-52 w-52 items-center justify-center rounded-xl bg-white p-3 ring-1 ring-ink/10">
+                <img
+                  src={api.getQrCodeUrl(qrLink)}
+                  alt={`QR code for ${qrLink.shortUrl}`}
+                  className="h-full w-full"
+                />
+              </div>
+              <p className="mt-4 truncate text-sm font-medium text-orange" title={qrLink.shortUrl}>
+                {qrLink.shortUrl.replace(/^https?:\/\//, '')}
+              </p>
+              <p className="mt-1 truncate text-xs text-ink-soft" title={qrLink.originalUrl}>
+                {qrLink.originalUrl}
+              </p>
+              <div className="mt-5 flex gap-2">
+                <a
+                  href={api.getQrCodeUrl(qrLink)}
+                  download={`${qrLink.shortCode}-qr.png`}
+                  className="flex-1 rounded-full bg-orange px-4 py-2 text-sm font-medium text-white transition hover:bg-ink"
+                >
+                  Download
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setQrLink(null)}
+                  className="flex-1 rounded-full border border-ink/15 px-4 py-2 text-sm text-ink-soft transition hover:border-orange hover:text-orange"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {user && (
           <div className="mt-16 border-t border-ink/10 pt-6 text-center">
             {!showDeleteAccount ? (
@@ -291,17 +339,9 @@ export function Dashboard({
                 <p className="text-sm font-medium text-red-700">Delete your account</p>
                 <p className="mt-1 text-xs text-red-700/70">
                   This deactivates your account and signs you out everywhere. Your existing links will keep
-                  working, but you won't be able to log back in.
+                  working during the recovery window.
                 </p>
                 <form onSubmit={handleDeleteAccount} className="mt-3 space-y-2">
-                  <input
-                    type="password"
-                    required
-                    placeholder="Confirm your password"
-                    value={deletePassword}
-                    onChange={(e) => setDeletePassword(e.target.value)}
-                    className="w-full rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm text-ink outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                  />
                   {deleteAccountError && <p className="text-xs text-red-600">{deleteAccountError}</p>}
                   <div className="flex gap-2 pt-1">
                     <button
@@ -315,7 +355,6 @@ export function Dashboard({
                       type="button"
                       onClick={() => {
                         setShowDeleteAccount(false);
-                        setDeletePassword('');
                         setDeleteAccountError('');
                       }}
                       className="rounded-full px-4 py-1.5 text-xs text-ink-soft transition hover:text-ink"

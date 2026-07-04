@@ -13,7 +13,6 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(rateLimitInterceptor)
-                .addPathPatterns("/api/shorten", "/api/auth/register", "/api/auth/resend-verification");
+        registry.addInterceptor(rateLimitInterceptor).addPathPatterns("/api/shorten");
     }
 }

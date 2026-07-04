@@ -22,7 +22,7 @@ class ShortUrlRepositoryTest {
     private Long createUser(String email) {
         User user = new User();
         user.setEmail(email);
-        user.setPasswordHash("hash");
+        user.setProvider("google");
         return userRepository.saveAndFlush(user).getId();
     }
 

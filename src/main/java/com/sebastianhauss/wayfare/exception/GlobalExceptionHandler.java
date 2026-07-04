@@ -42,18 +42,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.GONE).body(new ErrorResponse(ex.getMessage()));
     }
 
-    @ExceptionHandler(EmailAlreadyInUseException.class)
-    public ResponseEntity<ErrorResponse> handleEmailAlreadyInUse(EmailAlreadyInUseException ex) {
-        log.warn("Registration rejected: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
-    }
-
-    @ExceptionHandler(InvalidCredentialsException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
-        log.warn("Login rejected: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse(ex.getMessage()));
-    }
-
     @ExceptionHandler(InvalidRefreshTokenException.class)
     public ResponseEntity<ErrorResponse> handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
         log.warn("Refresh rejected: {}", ex.getMessage());
@@ -76,17 +64,5 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleReactivationNotAllowed(ReactivationNotAllowedException ex) {
         log.warn("Reactivation rejected: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
-    }
-
-    @ExceptionHandler(EmailNotVerifiedException.class)
-    public ResponseEntity<ErrorResponse> handleEmailNotVerified(EmailNotVerifiedException ex) {
-        log.warn("Login rejected (unverified email): {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage(), "EMAIL_NOT_VERIFIED"));
-    }
-
-    @ExceptionHandler(InvalidVerificationTokenException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidVerificationToken(InvalidVerificationTokenException ex) {
-        log.warn("Email verification rejected: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(ex.getMessage()));
     }
 }

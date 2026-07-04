@@ -3,7 +3,9 @@ package com.sebastianhauss.wayfare.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sebastianhauss.wayfare.dto.ErrorResponse;
 import com.sebastianhauss.wayfare.security.JwtAuthenticationFilter;
+import com.sebastianhauss.wayfare.security.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,26 +15,31 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
+@Slf4j
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
     @Value("${app.allowed-origins}")
     private String allowedOrigins;
+
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -42,19 +49,41 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh",
-                                "/api/auth/logout", "/api/auth/reactivate", "/api/auth/verify-email", "/api/auth/resend-verification")
-                        .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/refresh", "/api/auth/logout").permitAll()
+                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/shorten").permitAll()
                         .requestMatchers("/{code}", "/{code}/qr").permitAll()
                         .anyRequest().authenticated())
-                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint((request, response, authException) -> {
-                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    response.getWriter().write(objectMapper.writeValueAsString(new ErrorResponse("Authentication required")));
-                }))
+                .oauth2Login(oauth -> oauth
+                        .successHandler(oAuth2LoginSuccessHandler)
+                        .failureHandler((request, response, exception) -> {
+                            log.warn("OAuth2 sign-in failed: {}", exception.getMessage(), exception);
+                            response.sendRedirect(frontendUrl + "/auth/callback#error="
+                                    + URLEncoder.encode(oAuthErrorMessage(exception), StandardCharsets.UTF_8));
+                        }))
+                .exceptionHandling(exceptions -> exceptions.defaultAuthenticationEntryPointFor(
+                        (request, response, authException) -> {
+                            response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.getWriter().write(objectMapper.writeValueAsString(new ErrorResponse("Authentication required")));
+                        },
+                        request -> request.getRequestURI().startsWith("/api/")))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    private String oAuthErrorMessage(Exception exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            return "Google sign-in failed. Check the backend logs for details.";
+        }
+        if (message.contains("authorization_request_not_found")) {
+            return "Google sign-in session expired. Please start sign-in again.";
+        }
+        if (message.contains("invalid_client") || message.contains("Unauthorized")) {
+            return "Google sign-in failed because the OAuth client secret is missing or invalid.";
+        }
+        return "Google sign-in failed: " + message;
     }
 
     @Bean
@@ -66,10 +95,5 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 }
