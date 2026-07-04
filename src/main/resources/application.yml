@@ -9,3 +9,8 @@ spring:
 
   flyway:
     enabled: true
+
+  http:
+    client:
+      connect-timeout: 5s
+      read-timeout: 5s

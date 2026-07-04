@@ -9,26 +9,12 @@ spring:
       host: localhost
       port: 6379
 
-  mail:
-    host: ${SMTP_HOST:}
-    port: ${SMTP_PORT:587}
-    username: ${SMTP_USERNAME:}
-    password: ${SMTP_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-          connectiontimeout: 5000
-          timeout: 5000
-          writetimeout: 5000
-
 app:
   base-url: http://localhost:8080
   allowed-origins: http://localhost:5173,http://localhost:3000
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
-  mail-from: ${MAIL_FROM:Wayfare <noreply@wayfare.local>}
+  mail-from: ${MAIL_FROM:onboarding@resend.dev}
+  resend-api-key: ${RESEND_API_KEY:}
 
 jwt:
   secret: local-dev-secret-do-not-use-in-production-01234567
