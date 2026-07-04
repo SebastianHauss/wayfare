@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+
+  --color-cream: #faf5ec;
+  --color-cream-card: #ffffff;
+  --color-ink: #2b2018;
+  --color-ink-soft: #8c7b6b;
+  --color-orange: #c9663f;
+  --color-orange-light: #f3ddc9;
+}
+
+body {
+  @apply bg-cream text-ink antialiased;
+}
+
+@layer utilities {
+  .bg-radial-glow {
+    background-image:
+      radial-gradient(680px circle at 20% -8%, rgba(201, 102, 63, 0.12), transparent 60%),
+      radial-gradient(520px circle at 100% 8%, rgba(201, 102, 63, 0.08), transparent 55%);
+    background-repeat: no-repeat;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
