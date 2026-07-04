@@ -25,4 +25,6 @@ public class User {
 
     @CreationTimestamp
     private Instant createdAt;
+
+    private Instant deletedAt;
 }

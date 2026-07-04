@@ -65,4 +65,16 @@ public class GlobalExceptionHandler {
         log.warn("User lookup failed: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(ex.getMessage()));
     }
+
+    @ExceptionHandler(AccountDeletedException.class)
+    public ResponseEntity<ErrorResponse> handleAccountDeleted(AccountDeletedException ex) {
+        log.warn("Rejected request for deleted account: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ReactivationNotAllowedException.class)
+    public ResponseEntity<ErrorResponse> handleReactivationNotAllowed(ReactivationNotAllowedException ex) {
+        log.warn("Reactivation rejected: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
+    }
 }
