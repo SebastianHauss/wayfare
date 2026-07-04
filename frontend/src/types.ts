@@ -23,4 +23,9 @@ export interface LinkResponse {
 
 export interface ErrorResponse {
   error: string;
+  code: string | null;
+}
+
+export interface MessageResponse {
+  message: string;
 }

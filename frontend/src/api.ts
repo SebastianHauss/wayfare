@@ -1,4 +1,6 @@
-import type { AuthResponse, LinkResponse, MeResponse } from './types';
+import type { AuthResponse, LinkResponse, MeResponse, MessageResponse } from './types';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 const ACCESS_TOKEN_KEY = 'wayfare.accessToken';
 const REFRESH_TOKEN_KEY = 'wayfare.refreshToken';
@@ -24,21 +26,23 @@ function clearSession() {
 
 export class ApiError extends Error {
   status: number;
+  code: string | null;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code: string | null = null) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
-async function parseErrorMessage(res: Response) {
+async function parseError(res: Response): Promise<{ message: string; code: string | null }> {
   const body = await res.json().catch(() => ({}));
-  return body.error || `Request failed (${res.status})`;
+  return { message: body.error || `Request failed (${res.status})`, code: body.code ?? null };
 }
 
 async function request<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
   const accessToken = getAccessToken();
-  const res = await fetch(path, {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
@@ -53,7 +57,10 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
     clearSession();
   }
 
-  if (!res.ok) throw new ApiError(await parseErrorMessage(res), res.status);
+  if (!res.ok) {
+    const { message, code } = await parseError(res);
+    throw new ApiError(message, res.status, code);
+  }
   if (res.status === 204) return undefined as T;
   return res.json();
 }
@@ -61,7 +68,7 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
 async function refresh(): Promise<boolean> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
-  const res = await fetch('/api/auth/refresh', {
+  const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
@@ -80,13 +87,27 @@ export async function login(email: string, password: string): Promise<MeResponse
   return request<MeResponse>('/api/auth/me');
 }
 
-export async function register(email: string, password: string): Promise<MeResponse> {
-  const auth = await request<AuthResponse>('/api/auth/register', {
+export function register(email: string, password: string): Promise<MessageResponse> {
+  return request<MessageResponse>('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
+}
+
+export async function verifyEmail(token: string): Promise<MeResponse> {
+  const auth = await request<AuthResponse>('/api/auth/verify-email', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
   setSession(auth);
   return request<MeResponse>('/api/auth/me');
+}
+
+export function resendVerification(email: string): Promise<MessageResponse> {
+  return request<MessageResponse>('/api/auth/resend-verification', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
 }
 
 export async function reactivate(email: string, password: string): Promise<MeResponse> {
@@ -101,7 +122,7 @@ export async function reactivate(email: string, password: string): Promise<MeRes
 export async function logout(): Promise<void> {
   const refreshToken = getRefreshToken();
   try {
-    await fetch('/api/auth/logout', {
+    await fetch(`${API_BASE_URL}/api/auth/logout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
