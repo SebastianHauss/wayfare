@@ -24,6 +24,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final AuthService authService;
     private final OAuth2EmailResolver emailResolver;
+    private final AuthCookieService authCookieService;
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
@@ -43,8 +44,8 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
         try {
             AuthResponse tokens = authService.loginWithOAuth(email, provider);
-            response.sendRedirect(callbackUrl(
-                    "access_token=" + encode(tokens.accessToken()) + "&refresh_token=" + encode(tokens.refreshToken())));
+            authCookieService.setAuthCookies(response, tokens.accessToken(), tokens.refreshToken());
+            response.sendRedirect(frontendUrl);
         } catch (ReactivationNotAllowedException e) {
             response.sendRedirect(callbackUrl("error=" + encode(e.getMessage())));
         }

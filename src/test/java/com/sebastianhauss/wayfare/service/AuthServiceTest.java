@@ -2,7 +2,6 @@ package com.sebastianhauss.wayfare.service;
 
 import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.MeResponse;
-import com.sebastianhauss.wayfare.dto.RefreshRequest;
 import com.sebastianhauss.wayfare.exception.AccountDeletedException;
 import com.sebastianhauss.wayfare.exception.InvalidRefreshTokenException;
 import com.sebastianhauss.wayfare.exception.ReactivationNotAllowedException;
@@ -137,11 +136,19 @@ class AuthServiceTest {
     }
 
     @Test
+    void refresh_throws_whenTokenMissing() {
+        assertThatThrownBy(() -> authService.refresh(null))
+                .isInstanceOf(InvalidRefreshTokenException.class);
+        assertThatThrownBy(() -> authService.refresh(" "))
+                .isInstanceOf(InvalidRefreshTokenException.class);
+    }
+
+    @Test
     void refresh_throws_whenTokenNotFound() {
         when(jwtService.hashToken("raw-token")).thenReturn("hashed-token");
         when(refreshTokenRepository.findByTokenHashAndRevokedFalse("hashed-token")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("raw-token")))
+        assertThatThrownBy(() -> authService.refresh("raw-token"))
                 .isInstanceOf(InvalidRefreshTokenException.class);
     }
 
@@ -153,7 +160,7 @@ class AuthServiceTest {
         when(jwtService.hashToken("raw-token")).thenReturn("hashed-token");
         when(refreshTokenRepository.findByTokenHashAndRevokedFalse("hashed-token")).thenReturn(Optional.of(expired));
 
-        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("raw-token")))
+        assertThatThrownBy(() -> authService.refresh("raw-token"))
                 .isInstanceOf(InvalidRefreshTokenException.class);
     }
 
@@ -170,7 +177,7 @@ class AuthServiceTest {
         user.setDeletedAt(Instant.now().minusSeconds(60));
         when(userRepository.findById(9L)).thenReturn(Optional.of(user));
 
-        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("raw-token")))
+        assertThatThrownBy(() -> authService.refresh("raw-token"))
                 .isInstanceOf(InvalidRefreshTokenException.class);
         assertThat(existing.isRevoked()).isTrue();
         verify(jwtService, never()).generateAccessToken(any());
@@ -195,7 +202,7 @@ class AuthServiceTest {
         when(jwtService.refreshTokenExpiry()).thenReturn(Instant.now().plusSeconds(2592000));
         when(jwtService.getAccessTokenExpirationSeconds()).thenReturn(900L);
 
-        AuthResponse response = authService.refresh(new RefreshRequest("raw-old-token"));
+        AuthResponse response = authService.refresh("raw-old-token");
 
         assertThat(existing.isRevoked()).isTrue();
         assertThat(response.accessToken()).isEqualTo("new-access-token");
@@ -209,10 +216,18 @@ class AuthServiceTest {
         when(jwtService.hashToken("raw-token")).thenReturn("hashed-token");
         when(refreshTokenRepository.findByTokenHashAndRevokedFalse("hashed-token")).thenReturn(Optional.of(existing));
 
-        authService.logout(new RefreshRequest("raw-token"));
+        authService.logout("raw-token");
 
         assertThat(existing.isRevoked()).isTrue();
         verify(refreshTokenRepository).save(existing);
+    }
+
+    @Test
+    void logout_isNoop_whenTokenIsNull() {
+        authService.logout(null);
+
+        verify(refreshTokenRepository, never()).save(any());
+        verify(jwtService, never()).hashToken(any());
     }
 
     @Test
@@ -220,7 +235,7 @@ class AuthServiceTest {
         when(jwtService.hashToken("raw-token")).thenReturn("hashed-token");
         when(refreshTokenRepository.findByTokenHashAndRevokedFalse("hashed-token")).thenReturn(Optional.empty());
 
-        authService.logout(new RefreshRequest("raw-token"));
+        authService.logout("raw-token");
 
         verify(refreshTokenRepository, never()).save(any());
     }

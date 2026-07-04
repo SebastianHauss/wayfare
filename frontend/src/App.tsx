@@ -4,15 +4,6 @@ import type { MeResponse } from './types';
 import { AuthScreen } from './AuthScreen';
 import { Dashboard } from './Dashboard';
 
-function readOAuthCallback(): { accessToken: string; refreshToken: string } | null {
-  if (window.location.pathname !== '/auth/callback') return null;
-  const params = new URLSearchParams(window.location.hash.slice(1));
-  const accessToken = params.get('access_token');
-  const refreshToken = params.get('refresh_token');
-  if (!accessToken || !refreshToken) return null;
-  return { accessToken, refreshToken };
-}
-
 function readOAuthError(): string | null {
   if (window.location.pathname !== '/auth/callback') return null;
   return new URLSearchParams(window.location.hash.slice(1)).get('error');
@@ -25,26 +16,9 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(readOAuthError);
 
   useEffect(() => {
-    const oauthCallback = readOAuthCallback();
-    if (oauthCallback) {
-      api
-        .completeOAuthLogin(oauthCallback.accessToken, oauthCallback.refreshToken)
-        .then((u) => {
-          setUser(u);
-          setShowAuth(false);
-          window.history.replaceState({}, '', '/');
-        })
-        .catch((err) => setAuthError(err instanceof Error ? err.message : 'Sign-in failed'))
-        .finally(() => setChecking(false));
-      return;
-    }
     if (authError) {
       setShowAuth(true);
       window.history.replaceState({}, '', '/');
-    }
-    if (!api.getAccessToken()) {
-      setChecking(false);
-      return;
     }
     api
       .getCurrentUser()

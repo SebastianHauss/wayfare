@@ -1,28 +1,10 @@
-import type { AuthResponse, LinkResponse, MeResponse } from './types';
+import type { LinkResponse, MeResponse } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+const CSRF_HEADER = 'X-Requested-With';
+const CSRF_HEADER_VALUE = 'WayfareApp';
 
-const ACCESS_TOKEN_KEY = 'wayfare.accessToken';
-const REFRESH_TOKEN_KEY = 'wayfare.refreshToken';
 const ANONYMOUS_LINKS_KEY = 'wayfare.anonymousLinks';
-
-export function getAccessToken() {
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
-}
-
-export function getRefreshToken() {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
-}
-
-function setSession(auth: AuthResponse) {
-  localStorage.setItem(ACCESS_TOKEN_KEY, auth.accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, auth.refreshToken);
-}
-
-function clearSession() {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-}
 
 export class ApiError extends Error {
   status: number;
@@ -39,36 +21,25 @@ export function getOAuthUrl(provider: 'google' | 'github') {
   return `${API_BASE_URL}/oauth2/authorization/${provider}`;
 }
 
-export async function completeOAuthLogin(accessToken: string, refreshToken: string): Promise<MeResponse> {
-  setSession({ accessToken, refreshToken, tokenType: 'Bearer', expiresIn: 0 });
-  try {
-    return await request<MeResponse>('/api/auth/me');
-  } catch (error) {
-    clearSession();
-    throw error;
-  }
-}
-
 async function parseError(res: Response): Promise<{ message: string; code: string | null }> {
   const body = await res.json().catch(() => ({}));
   return { message: body.error || `Request failed (${res.status})`, code: body.code ?? null };
 }
 
 async function request<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
-  const accessToken = getAccessToken();
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      [CSRF_HEADER]: CSRF_HEADER_VALUE,
       ...options.headers,
     },
   });
 
-  if (res.status === 401 && retry && getRefreshToken()) {
+  if (res.status === 401 && retry) {
     const refreshed = await refresh();
     if (refreshed) return request<T>(path, options, false);
-    clearSession();
   }
 
   if (!res.ok) {
@@ -80,29 +51,20 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
 }
 
 async function refresh(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
   const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
+    credentials: 'include',
+    headers: { [CSRF_HEADER]: CSRF_HEADER_VALUE },
   });
-  if (!res.ok) return false;
-  setSession(await res.json());
-  return true;
+  return res.ok;
 }
 
 export async function logout(): Promise<void> {
-  const refreshToken = getRefreshToken();
-  try {
-    await fetch(`${API_BASE_URL}/api/auth/logout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
-  } finally {
-    clearSession();
-  }
+  await fetch(`${API_BASE_URL}/api/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { [CSRF_HEADER]: CSRF_HEADER_VALUE },
+  });
 }
 
 export function getCurrentUser(): Promise<MeResponse> {
@@ -137,7 +99,6 @@ export function getQrCodeUrl(link: LinkResponse): string {
 
 export async function deleteAccount(): Promise<void> {
   await request<void>('/api/auth/me', { method: 'DELETE' });
-  clearSession();
 }
 
 export function getAnonymousLinks(): LinkResponse[] {

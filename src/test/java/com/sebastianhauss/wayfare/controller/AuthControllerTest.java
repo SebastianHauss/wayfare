@@ -2,7 +2,7 @@ package com.sebastianhauss.wayfare.controller;
 
 import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.MeResponse;
-import com.sebastianhauss.wayfare.dto.RefreshRequest;
+import com.sebastianhauss.wayfare.security.AuthCookieService;
 import com.sebastianhauss.wayfare.service.AuthService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -22,33 +23,37 @@ class AuthControllerTest {
     @Mock
     private AuthService authService;
 
+    @Mock
+    private AuthCookieService authCookieService;
+
     private AuthController authController;
 
     @BeforeEach
     void setUp() {
-        authController = new AuthController(authService);
+        authController = new AuthController(authService, authCookieService);
     }
 
     @Test
-    void refresh_returnsOkWithAuthResponse() {
-        RefreshRequest request = new RefreshRequest("raw-refresh-token");
-        AuthResponse response = new AuthResponse("access", "refresh", "Bearer", 900L);
-        when(authService.refresh(request)).thenReturn(response);
+    void refresh_setsAuthCookies_andReturnsNoContent() {
+        AuthResponse tokens = new AuthResponse("access", "refresh", "Bearer", 900L);
+        when(authService.refresh("raw-refresh-token")).thenReturn(tokens);
+        MockHttpServletResponse response = new MockHttpServletResponse();
 
-        ResponseEntity<AuthResponse> result = authController.refresh(request);
-
-        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(result.getBody()).isEqualTo(response);
-    }
-
-    @Test
-    void logout_returnsNoContent() {
-        RefreshRequest request = new RefreshRequest("raw-refresh-token");
-
-        ResponseEntity<Void> result = authController.logout(request);
+        ResponseEntity<Void> result = authController.refresh("raw-refresh-token", response);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-        verify(authService).logout(request);
+        verify(authCookieService).setAuthCookies(response, "access", "refresh");
+    }
+
+    @Test
+    void logout_clearsAuthCookies_andReturnsNoContent() {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        ResponseEntity<Void> result = authController.logout("raw-refresh-token", response);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(authService).logout("raw-refresh-token");
+        verify(authCookieService).clearAuthCookies(response);
     }
 
     @Test
@@ -63,10 +68,13 @@ class AuthControllerTest {
     }
 
     @Test
-    void deleteAccount_returnsNoContent() {
-        ResponseEntity<Void> result = authController.deleteAccount();
+    void deleteAccount_clearsAuthCookies_andReturnsNoContent() {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        ResponseEntity<Void> result = authController.deleteAccount(response);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         verify(authService).deleteAccount();
+        verify(authCookieService).clearAuthCookies(response);
     }
 }

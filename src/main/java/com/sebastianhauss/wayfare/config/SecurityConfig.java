@@ -2,6 +2,7 @@ package com.sebastianhauss.wayfare.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sebastianhauss.wayfare.dto.ErrorResponse;
+import com.sebastianhauss.wayfare.security.CsrfHeaderFilter;
 import com.sebastianhauss.wayfare.security.JwtAuthenticationFilter;
 import com.sebastianhauss.wayfare.security.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final CsrfHeaderFilter csrfHeaderFilter;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
     @Value("${app.allowed-origins}")
@@ -68,7 +70,8 @@ public class SecurityConfig {
                             response.getWriter().write(objectMapper.writeValueAsString(new ErrorResponse("Authentication required")));
                         },
                         request -> request.getRequestURI().startsWith("/api/")))
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(csrfHeaderFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 
@@ -91,7 +94,8 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowedHeaders(List.of("Content-Type", CsrfHeaderFilter.CSRF_HEADER));
+        configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

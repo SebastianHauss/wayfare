@@ -2,7 +2,6 @@ package com.sebastianhauss.wayfare.service;
 
 import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.MeResponse;
-import com.sebastianhauss.wayfare.dto.RefreshRequest;
 import com.sebastianhauss.wayfare.exception.AccountDeletedException;
 import com.sebastianhauss.wayfare.exception.InvalidRefreshTokenException;
 import com.sebastianhauss.wayfare.exception.ReactivationNotAllowedException;
@@ -54,8 +53,11 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse refresh(RefreshRequest request) {
-        RefreshToken existing = validRefreshToken(request.refreshToken());
+    public AuthResponse refresh(String rawRefreshToken) {
+        if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+            throw new InvalidRefreshTokenException("Refresh token is missing");
+        }
+        RefreshToken existing = validRefreshToken(rawRefreshToken);
         existing.setRevoked(true);
         refreshTokenRepository.save(existing);
 
@@ -68,8 +70,11 @@ public class AuthService {
     }
 
     @Transactional
-    public void logout(RefreshRequest request) {
-        String tokenHash = jwtService.hashToken(request.refreshToken());
+    public void logout(String rawRefreshToken) {
+        if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+            return;
+        }
+        String tokenHash = jwtService.hashToken(rawRefreshToken);
         refreshTokenRepository.findByTokenHashAndRevokedFalse(tokenHash).ifPresent(token -> {
             token.setRevoked(true);
             refreshTokenRepository.save(token);

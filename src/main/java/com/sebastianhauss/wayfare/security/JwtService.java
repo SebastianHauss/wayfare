@@ -57,6 +57,10 @@ public class JwtService {
         return accessTokenExpirationSeconds;
     }
 
+    public long getRefreshTokenExpirationSeconds() {
+        return refreshTokenExpirationSeconds;
+    }
+
     public Instant refreshTokenExpiry() {
         return Instant.now().plus(refreshTokenExpirationSeconds, ChronoUnit.SECONDS);
     }
