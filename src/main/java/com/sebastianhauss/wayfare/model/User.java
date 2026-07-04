@@ -27,4 +27,12 @@ public class User {
     private Instant createdAt;
 
     private Instant deletedAt;
+
+    @Column(nullable = false)
+    private boolean emailVerified = false;
+
+    @Column(length = 64, unique = true)
+    private String verificationToken;
+
+    private Instant verificationTokenExpiresAt;
 }

@@ -69,12 +69,24 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountDeletedException.class)
     public ResponseEntity<ErrorResponse> handleAccountDeleted(AccountDeletedException ex) {
         log.warn("Rejected request for deleted account: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage(), "ACCOUNT_DELETED"));
     }
 
     @ExceptionHandler(ReactivationNotAllowedException.class)
     public ResponseEntity<ErrorResponse> handleReactivationNotAllowed(ReactivationNotAllowedException ex) {
         log.warn("Reactivation rejected: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<ErrorResponse> handleEmailNotVerified(EmailNotVerifiedException ex) {
+        log.warn("Login rejected (unverified email): {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage(), "EMAIL_NOT_VERIFIED"));
+    }
+
+    @ExceptionHandler(InvalidVerificationTokenException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidVerificationToken(InvalidVerificationTokenException ex) {
+        log.warn("Email verification rejected: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(ex.getMessage()));
     }
 }

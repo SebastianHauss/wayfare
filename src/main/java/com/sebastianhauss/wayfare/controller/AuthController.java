@@ -4,8 +4,11 @@ import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.DeleteAccountRequest;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
 import com.sebastianhauss.wayfare.dto.MeResponse;
+import com.sebastianhauss.wayfare.dto.MessageResponse;
 import com.sebastianhauss.wayfare.dto.RefreshRequest;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
+import com.sebastianhauss.wayfare.dto.ResendVerificationRequest;
+import com.sebastianhauss.wayfare.dto.VerifyEmailRequest;
 import com.sebastianhauss.wayfare.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,8 +29,19 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@RequestBody @Valid RegisterRequest request) {
+    public ResponseEntity<MessageResponse> register(@RequestBody @Valid RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    }
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<AuthResponse> verifyEmail(@RequestBody @Valid VerifyEmailRequest request) {
+        return ResponseEntity.ok(authService.verifyEmail(request));
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<MessageResponse> resendVerification(@RequestBody @Valid ResendVerificationRequest request) {
+        authService.resendVerification(request);
+        return ResponseEntity.ok(new MessageResponse("If an account exists for that email, a verification link has been sent."));
     }
 
     @PostMapping("/login")

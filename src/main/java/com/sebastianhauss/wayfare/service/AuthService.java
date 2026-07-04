@@ -4,12 +4,17 @@ import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.DeleteAccountRequest;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
 import com.sebastianhauss.wayfare.dto.MeResponse;
+import com.sebastianhauss.wayfare.dto.MessageResponse;
 import com.sebastianhauss.wayfare.dto.RefreshRequest;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
+import com.sebastianhauss.wayfare.dto.ResendVerificationRequest;
+import com.sebastianhauss.wayfare.dto.VerifyEmailRequest;
 import com.sebastianhauss.wayfare.exception.AccountDeletedException;
 import com.sebastianhauss.wayfare.exception.EmailAlreadyInUseException;
+import com.sebastianhauss.wayfare.exception.EmailNotVerifiedException;
 import com.sebastianhauss.wayfare.exception.InvalidCredentialsException;
 import com.sebastianhauss.wayfare.exception.InvalidRefreshTokenException;
+import com.sebastianhauss.wayfare.exception.InvalidVerificationTokenException;
 import com.sebastianhauss.wayfare.exception.ReactivationNotAllowedException;
 import com.sebastianhauss.wayfare.exception.UserNotFoundException;
 import com.sebastianhauss.wayfare.model.RefreshToken;
@@ -33,22 +38,30 @@ import java.time.temporal.ChronoUnit;
 @Slf4j
 public class AuthService {
 
+    private static final int VERIFICATION_TOKEN_VALIDITY_HOURS = 24;
+
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final EmailService emailService;
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
+    public MessageResponse register(RegisterRequest request) {
         if (userRepository.findByEmail(request.email()).isPresent()) {
             throw new EmailAlreadyInUseException("Email already in use: " + request.email());
         }
         User user = new User();
         user.setEmail(request.email());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setEmailVerified(false);
+        String token = generateVerificationToken();
+        user.setVerificationToken(token);
+        user.setVerificationTokenExpiresAt(Instant.now().plus(VERIFICATION_TOKEN_VALIDITY_HOURS, ChronoUnit.HOURS));
         User saved = userRepository.save(user);
         log.info("Registered user: {}", saved.getEmail());
-        return issueTokens(saved);
+        emailService.sendVerificationEmail(saved.getEmail(), token);
+        return new MessageResponse("Check your email to verify your account before logging in.");
     }
 
     @Transactional
@@ -60,6 +73,9 @@ public class AuthService {
         }
         if (user.getDeletedAt() != null) {
             throw new AccountDeletedException("This account has been deleted");
+        }
+        if (!user.isEmailVerified()) {
+            throw new EmailNotVerifiedException("Please verify your email before logging in");
         }
         return issueTokens(user);
     }
@@ -128,6 +144,39 @@ public class AuthService {
         userRepository.save(user);
         refreshTokenRepository.revokeAllByUserId(user.getId());
         log.info("Soft-deleted user account: {}", user.getId());
+    }
+
+    @Transactional
+    public AuthResponse verifyEmail(VerifyEmailRequest request) {
+        User user = userRepository.findByVerificationToken(request.token())
+                .orElseThrow(() -> new InvalidVerificationTokenException("Invalid or expired verification link"));
+        if (user.getVerificationTokenExpiresAt() == null || user.getVerificationTokenExpiresAt().isBefore(Instant.now())) {
+            throw new InvalidVerificationTokenException("Invalid or expired verification link");
+        }
+        user.setEmailVerified(true);
+        user.setVerificationToken(null);
+        user.setVerificationTokenExpiresAt(null);
+        userRepository.save(user);
+        log.info("Verified email for user: {}", user.getId());
+        return issueTokens(user);
+    }
+
+    @Transactional
+    public void resendVerification(ResendVerificationRequest request) {
+        userRepository.findByEmail(request.email()).ifPresent(user -> {
+            if (user.getDeletedAt() != null || user.isEmailVerified()) {
+                return;
+            }
+            String token = generateVerificationToken();
+            user.setVerificationToken(token);
+            user.setVerificationTokenExpiresAt(Instant.now().plus(VERIFICATION_TOKEN_VALIDITY_HOURS, ChronoUnit.HOURS));
+            userRepository.save(user);
+            emailService.sendVerificationEmail(user.getEmail(), token);
+        });
+    }
+
+    private String generateVerificationToken() {
+        return jwtService.generateOpaqueRefreshToken();
     }
 
     private Long currentUserId() {
