@@ -6,6 +6,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
@@ -28,5 +31,33 @@ class UserRepositoryTest {
     @Test
     void findByEmail_returnsEmpty_whenEmailDoesNotExist() {
         assertThat(repository.findByEmail("missing@example.com")).isEmpty();
+    }
+
+    @Test
+    void findByDeletedAtBefore_includesOnlyAccountsDeletedBeforeCutoff() {
+        Instant cutoff = Instant.now().minusSeconds(60);
+
+        User oldDeleted = new User();
+        oldDeleted.setEmail("old-deleted-repo-test@example.com");
+        oldDeleted.setPasswordHash("hashed");
+        oldDeleted.setDeletedAt(cutoff.minusSeconds(10));
+        repository.saveAndFlush(oldDeleted);
+
+        User recentlyDeleted = new User();
+        recentlyDeleted.setEmail("recently-deleted-repo-test@example.com");
+        recentlyDeleted.setPasswordHash("hashed");
+        recentlyDeleted.setDeletedAt(cutoff.plusSeconds(10));
+        repository.saveAndFlush(recentlyDeleted);
+
+        User active = new User();
+        active.setEmail("active-repo-test@example.com");
+        active.setPasswordHash("hashed");
+        repository.saveAndFlush(active);
+
+        List<User> result = repository.findByDeletedAtBefore(cutoff);
+
+        assertThat(result).extracting(User::getEmail).contains("old-deleted-repo-test@example.com");
+        assertThat(result).extracting(User::getEmail)
+                .doesNotContain("recently-deleted-repo-test@example.com", "active-repo-test@example.com");
     }
 }

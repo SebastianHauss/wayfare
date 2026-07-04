@@ -93,4 +93,23 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody().error()).isEqualTo("User no longer exists");
     }
+
+    @Test
+    void handleAccountDeleted_returns403WithMessage() {
+        ResponseEntity<ErrorResponse> response = handler.handleAccountDeleted(
+                new AccountDeletedException("This account has been deleted"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().error()).isEqualTo("This account has been deleted");
+    }
+
+    @Test
+    void handleReactivationNotAllowed_returns409WithMessage() {
+        ResponseEntity<ErrorResponse> response = handler.handleReactivationNotAllowed(
+                new ReactivationNotAllowedException("This account was permanently deleted and can no longer be reactivated"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().error())
+                .isEqualTo("This account was permanently deleted and can no longer be reactivated");
+    }
 }

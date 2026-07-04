@@ -1,13 +1,16 @@
 package com.sebastianhauss.wayfare.service;
 
 import com.sebastianhauss.wayfare.dto.AuthResponse;
+import com.sebastianhauss.wayfare.dto.DeleteAccountRequest;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
 import com.sebastianhauss.wayfare.dto.MeResponse;
 import com.sebastianhauss.wayfare.dto.RefreshRequest;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
+import com.sebastianhauss.wayfare.exception.AccountDeletedException;
 import com.sebastianhauss.wayfare.exception.EmailAlreadyInUseException;
 import com.sebastianhauss.wayfare.exception.InvalidCredentialsException;
 import com.sebastianhauss.wayfare.exception.InvalidRefreshTokenException;
+import com.sebastianhauss.wayfare.exception.ReactivationNotAllowedException;
 import com.sebastianhauss.wayfare.exception.UserNotFoundException;
 import com.sebastianhauss.wayfare.model.RefreshToken;
 import com.sebastianhauss.wayfare.model.User;
@@ -26,6 +29,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -121,6 +125,19 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_throws_whenAccountDeleted() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        user.setPasswordHash("hashed");
+        user.setDeletedAt(Instant.now().minusSeconds(60));
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("user@example.com", "password123")))
+                .isInstanceOf(AccountDeletedException.class);
+    }
+
+    @Test
     void login_issuesTokens_whenCredentialsValid() {
         User user = new User();
         user.setId(3L);
@@ -158,6 +175,25 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.refresh(new RefreshRequest("raw-token")))
                 .isInstanceOf(InvalidRefreshTokenException.class);
+    }
+
+    @Test
+    void refresh_throws_whenAccountDeleted() {
+        RefreshToken existing = new RefreshToken();
+        existing.setUserId(9L);
+        existing.setExpiresAt(Instant.now().plusSeconds(60));
+        when(jwtService.hashToken("raw-token")).thenReturn("hashed-token");
+        when(refreshTokenRepository.findByTokenHashAndRevokedFalse("hashed-token")).thenReturn(Optional.of(existing));
+
+        User user = new User();
+        user.setId(9L);
+        user.setDeletedAt(Instant.now().minusSeconds(60));
+        when(userRepository.findById(9L)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("raw-token")))
+                .isInstanceOf(InvalidRefreshTokenException.class);
+        assertThat(existing.isRevoked()).isTrue();
+        verify(jwtService, never()).generateAccessToken(any());
     }
 
     @Test
@@ -233,5 +269,131 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.getCurrentUser())
                 .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    void deleteAccount_throws_whenUserNoLongerExists() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(7L, null, java.util.List.of()));
+        when(userRepository.findById(7L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.deleteAccount(new DeleteAccountRequest("password123")))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    void deleteAccount_throws_whenAlreadyDeleted() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(7L, null, java.util.List.of()));
+        User user = new User();
+        user.setId(7L);
+        user.setDeletedAt(Instant.now());
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.deleteAccount(new DeleteAccountRequest("password123")))
+                .isInstanceOf(AccountDeletedException.class);
+        verify(passwordEncoder, never()).matches(any(), any());
+    }
+
+    @Test
+    void deleteAccount_throws_whenPasswordIncorrect() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(7L, null, java.util.List.of()));
+        User user = new User();
+        user.setId(7L);
+        user.setPasswordHash("hashed");
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-password", "hashed")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.deleteAccount(new DeleteAccountRequest("wrong-password")))
+                .isInstanceOf(InvalidCredentialsException.class);
+        assertThat(user.getDeletedAt()).isNull();
+        verify(refreshTokenRepository, never()).revokeAllByUserId(any());
+    }
+
+    @Test
+    void deleteAccount_softDeletesUserAndRevokesAllTokens_whenPasswordCorrect() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(7L, null, java.util.List.of()));
+        User user = new User();
+        user.setId(7L);
+        user.setPasswordHash("hashed");
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        authService.deleteAccount(new DeleteAccountRequest("password123"));
+
+        assertThat(user.getDeletedAt()).isNotNull();
+        verify(userRepository).save(user);
+        verify(refreshTokenRepository).revokeAllByUserId(7L);
+    }
+
+    @Test
+    void reactivate_throws_whenEmailNotFound() {
+        when(userRepository.findByEmail("missing@example.com")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.reactivate(new LoginRequest("missing@example.com", "password123")))
+                .isInstanceOf(InvalidCredentialsException.class);
+    }
+
+    @Test
+    void reactivate_throws_whenPasswordIncorrect() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        user.setPasswordHash("hashed");
+        user.setDeletedAt(Instant.now());
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-password", "hashed")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.reactivate(new LoginRequest("user@example.com", "wrong-password")))
+                .isInstanceOf(InvalidCredentialsException.class);
+    }
+
+    @Test
+    void reactivate_throws_whenAccountIsNotDeleted() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        user.setPasswordHash("hashed");
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.reactivate(new LoginRequest("user@example.com", "password123")))
+                .isInstanceOf(ReactivationNotAllowedException.class);
+    }
+
+    @Test
+    void reactivate_throws_whenPastGracePeriod() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        user.setPasswordHash("hashed");
+        user.setDeletedAt(Instant.now().minus(AccountPurgeService.GRACE_PERIOD_DAYS + 1, ChronoUnit.DAYS));
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.reactivate(new LoginRequest("user@example.com", "password123")))
+                .isInstanceOf(ReactivationNotAllowedException.class);
+        assertThat(user.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    void reactivate_clearsDeletedAtAndIssuesTokens_whenWithinGracePeriod() {
+        User user = new User();
+        user.setId(11L);
+        user.setEmail("user@example.com");
+        user.setPasswordHash("hashed");
+        user.setDeletedAt(Instant.now().minus(AccountPurgeService.GRACE_PERIOD_DAYS - 1, ChronoUnit.DAYS));
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+        when(jwtService.generateAccessToken(user)).thenReturn("access-token");
+        when(jwtService.generateOpaqueRefreshToken()).thenReturn("raw-refresh-token");
+        when(jwtService.hashToken(anyString())).thenReturn("hashed-refresh-token");
+        when(jwtService.refreshTokenExpiry()).thenReturn(Instant.now().plusSeconds(2592000));
+        when(jwtService.getAccessTokenExpirationSeconds()).thenReturn(900L);
+
+        AuthResponse response = authService.reactivate(new LoginRequest("user@example.com", "password123"));
+
+        assertThat(user.getDeletedAt()).isNull();
+        verify(userRepository).save(user);
+        assertThat(response.accessToken()).isEqualTo("access-token");
     }
 }

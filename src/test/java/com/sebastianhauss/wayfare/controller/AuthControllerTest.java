@@ -1,6 +1,7 @@
 package com.sebastianhauss.wayfare.controller;
 
 import com.sebastianhauss.wayfare.dto.AuthResponse;
+import com.sebastianhauss.wayfare.dto.DeleteAccountRequest;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
 import com.sebastianhauss.wayfare.dto.MeResponse;
 import com.sebastianhauss.wayfare.dto.RefreshRequest;
@@ -68,6 +69,18 @@ class AuthControllerTest {
     }
 
     @Test
+    void reactivate_returnsOkWithAuthResponse() {
+        LoginRequest request = new LoginRequest("user@example.com", "password123");
+        AuthResponse response = new AuthResponse("access", "refresh", "Bearer", 900L);
+        when(authService.reactivate(request)).thenReturn(response);
+
+        ResponseEntity<AuthResponse> result = authController.reactivate(request);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).isEqualTo(response);
+    }
+
+    @Test
     void logout_returnsNoContent() {
         RefreshRequest request = new RefreshRequest("raw-refresh-token");
 
@@ -86,5 +99,15 @@ class AuthControllerTest {
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody()).isEqualTo(response);
+    }
+
+    @Test
+    void deleteAccount_returnsNoContent() {
+        DeleteAccountRequest request = new DeleteAccountRequest("password123");
+
+        ResponseEntity<Void> result = authController.deleteAccount(request);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(authService).deleteAccount(request);
     }
 }
