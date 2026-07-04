@@ -4,8 +4,11 @@ import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.DeleteAccountRequest;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
 import com.sebastianhauss.wayfare.dto.MeResponse;
+import com.sebastianhauss.wayfare.dto.MessageResponse;
 import com.sebastianhauss.wayfare.dto.RefreshRequest;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
+import com.sebastianhauss.wayfare.dto.ResendVerificationRequest;
+import com.sebastianhauss.wayfare.dto.VerifyEmailRequest;
 import com.sebastianhauss.wayfare.service.AuthService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,15 +36,38 @@ class AuthControllerTest {
     }
 
     @Test
-    void register_returnsCreatedWithAuthResponse() {
+    void register_returnsCreatedWithMessage() {
         RegisterRequest request = new RegisterRequest("user@example.com", "password123");
-        AuthResponse response = new AuthResponse("access", "refresh", "Bearer", 900L);
+        MessageResponse response = new MessageResponse("Check your email to verify your account before logging in.");
         when(authService.register(request)).thenReturn(response);
 
-        ResponseEntity<AuthResponse> result = authController.register(request);
+        ResponseEntity<MessageResponse> result = authController.register(request);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(result.getBody()).isEqualTo(response);
+    }
+
+    @Test
+    void verifyEmail_returnsOkWithAuthResponse() {
+        VerifyEmailRequest request = new VerifyEmailRequest("good-token");
+        AuthResponse response = new AuthResponse("access", "refresh", "Bearer", 900L);
+        when(authService.verifyEmail(request)).thenReturn(response);
+
+        ResponseEntity<AuthResponse> result = authController.verifyEmail(request);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).isEqualTo(response);
+    }
+
+    @Test
+    void resendVerification_returnsOkWithGenericMessage() {
+        ResendVerificationRequest request = new ResendVerificationRequest("user@example.com");
+
+        ResponseEntity<MessageResponse> result = authController.resendVerification(request);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody().message()).isNotBlank();
+        verify(authService).resendVerification(request);
     }
 
     @Test

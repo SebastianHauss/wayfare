@@ -4,12 +4,17 @@ import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.DeleteAccountRequest;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
 import com.sebastianhauss.wayfare.dto.MeResponse;
+import com.sebastianhauss.wayfare.dto.MessageResponse;
 import com.sebastianhauss.wayfare.dto.RefreshRequest;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
+import com.sebastianhauss.wayfare.dto.ResendVerificationRequest;
+import com.sebastianhauss.wayfare.dto.VerifyEmailRequest;
 import com.sebastianhauss.wayfare.exception.AccountDeletedException;
 import com.sebastianhauss.wayfare.exception.EmailAlreadyInUseException;
+import com.sebastianhauss.wayfare.exception.EmailNotVerifiedException;
 import com.sebastianhauss.wayfare.exception.InvalidCredentialsException;
 import com.sebastianhauss.wayfare.exception.InvalidRefreshTokenException;
+import com.sebastianhauss.wayfare.exception.InvalidVerificationTokenException;
 import com.sebastianhauss.wayfare.exception.ReactivationNotAllowedException;
 import com.sebastianhauss.wayfare.exception.UserNotFoundException;
 import com.sebastianhauss.wayfare.model.RefreshToken;
@@ -55,11 +60,14 @@ class AuthServiceTest {
     @Mock
     private JwtService jwtService;
 
+    @Mock
+    private EmailService emailService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, refreshTokenRepository, passwordEncoder, jwtService);
+        authService = new AuthService(userRepository, refreshTokenRepository, passwordEncoder, jwtService, emailService);
     }
 
     @AfterEach
@@ -77,7 +85,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void register_hashesPasswordAndIssuesTokens() {
+    void register_hashesPasswordAndSendsVerificationEmail_withoutIssuingTokens() {
         when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.empty());
         when(passwordEncoder.encode("password123")).thenReturn("hashed");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
@@ -85,23 +93,22 @@ class AuthServiceTest {
             user.setId(1L);
             return user;
         });
-        when(jwtService.generateAccessToken(any(User.class))).thenReturn("access-token");
-        when(jwtService.generateOpaqueRefreshToken()).thenReturn("raw-refresh-token");
-        when(jwtService.hashToken("raw-refresh-token")).thenReturn("hashed-refresh-token");
-        when(jwtService.refreshTokenExpiry()).thenReturn(Instant.now().plusSeconds(2592000));
-        when(jwtService.getAccessTokenExpirationSeconds()).thenReturn(900L);
+        when(jwtService.generateOpaqueRefreshToken()).thenReturn("raw-verification-token");
 
-        AuthResponse response = authService.register(new RegisterRequest("user@example.com", "password123"));
+        MessageResponse response = authService.register(new RegisterRequest("user@example.com", "password123"));
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(userCaptor.capture());
-        assertThat(userCaptor.getValue().getPasswordHash()).isEqualTo("hashed");
+        User saved = userCaptor.getValue();
+        assertThat(saved.getPasswordHash()).isEqualTo("hashed");
+        assertThat(saved.isEmailVerified()).isFalse();
+        assertThat(saved.getVerificationToken()).isEqualTo("raw-verification-token");
+        assertThat(saved.getVerificationTokenExpiresAt()).isAfter(Instant.now());
 
-        assertThat(response.accessToken()).isEqualTo("access-token");
-        assertThat(response.refreshToken()).isEqualTo("raw-refresh-token");
-        assertThat(response.tokenType()).isEqualTo("Bearer");
-        assertThat(response.expiresIn()).isEqualTo(900L);
-        verify(refreshTokenRepository).save(any(RefreshToken.class));
+        assertThat(response.message()).isNotBlank();
+        verify(emailService).sendVerificationEmail("user@example.com", "raw-verification-token");
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
+        verify(jwtService, never()).generateAccessToken(any());
     }
 
     @Test
@@ -138,11 +145,25 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_throws_whenEmailNotVerified() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        user.setPasswordHash("hashed");
+        user.setEmailVerified(false);
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("user@example.com", "password123")))
+                .isInstanceOf(EmailNotVerifiedException.class);
+    }
+
+    @Test
     void login_issuesTokens_whenCredentialsValid() {
         User user = new User();
         user.setId(3L);
         user.setEmail("user@example.com");
         user.setPasswordHash("hashed");
+        user.setEmailVerified(true);
         when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
         when(jwtService.generateAccessToken(user)).thenReturn("access-token");
@@ -395,5 +416,99 @@ class AuthServiceTest {
         assertThat(user.getDeletedAt()).isNull();
         verify(userRepository).save(user);
         assertThat(response.accessToken()).isEqualTo("access-token");
+    }
+
+    @Test
+    void verifyEmail_throws_whenTokenNotFound() {
+        when(userRepository.findByVerificationToken("bad-token")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.verifyEmail(new VerifyEmailRequest("bad-token")))
+                .isInstanceOf(InvalidVerificationTokenException.class);
+    }
+
+    @Test
+    void verifyEmail_throws_whenTokenExpired() {
+        User user = new User();
+        user.setId(5L);
+        user.setVerificationToken("expired-token");
+        user.setVerificationTokenExpiresAt(Instant.now().minusSeconds(60));
+        when(userRepository.findByVerificationToken("expired-token")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.verifyEmail(new VerifyEmailRequest("expired-token")))
+                .isInstanceOf(InvalidVerificationTokenException.class);
+        assertThat(user.isEmailVerified()).isFalse();
+    }
+
+    @Test
+    void verifyEmail_marksVerifiedAndIssuesTokens_whenTokenValid() {
+        User user = new User();
+        user.setId(5L);
+        user.setEmail("user@example.com");
+        user.setVerificationToken("good-token");
+        user.setVerificationTokenExpiresAt(Instant.now().plusSeconds(3600));
+        when(userRepository.findByVerificationToken("good-token")).thenReturn(Optional.of(user));
+        when(jwtService.generateAccessToken(user)).thenReturn("access-token");
+        when(jwtService.generateOpaqueRefreshToken()).thenReturn("raw-refresh-token");
+        when(jwtService.hashToken(anyString())).thenReturn("hashed-refresh-token");
+        when(jwtService.refreshTokenExpiry()).thenReturn(Instant.now().plusSeconds(2592000));
+        when(jwtService.getAccessTokenExpirationSeconds()).thenReturn(900L);
+
+        AuthResponse response = authService.verifyEmail(new VerifyEmailRequest("good-token"));
+
+        assertThat(user.isEmailVerified()).isTrue();
+        assertThat(user.getVerificationToken()).isNull();
+        assertThat(user.getVerificationTokenExpiresAt()).isNull();
+        assertThat(response.accessToken()).isEqualTo("access-token");
+    }
+
+    @Test
+    void resendVerification_isNoop_whenEmailNotFound() {
+        when(userRepository.findByEmail("missing@example.com")).thenReturn(Optional.empty());
+
+        authService.resendVerification(new ResendVerificationRequest("missing@example.com"));
+
+        verify(emailService, never()).sendVerificationEmail(any(), any());
+    }
+
+    @Test
+    void resendVerification_isNoop_whenAlreadyVerified() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        user.setEmailVerified(true);
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+
+        authService.resendVerification(new ResendVerificationRequest("user@example.com"));
+
+        verify(emailService, never()).sendVerificationEmail(any(), any());
+    }
+
+    @Test
+    void resendVerification_isNoop_whenAccountDeleted() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        user.setEmailVerified(false);
+        user.setDeletedAt(Instant.now());
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+
+        authService.resendVerification(new ResendVerificationRequest("user@example.com"));
+
+        verify(emailService, never()).sendVerificationEmail(any(), any());
+    }
+
+    @Test
+    void resendVerification_issuesNewTokenAndSendsEmail_whenUnverifiedAndActive() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        user.setEmailVerified(false);
+        user.setVerificationToken("old-token");
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(jwtService.generateOpaqueRefreshToken()).thenReturn("new-token");
+
+        authService.resendVerification(new ResendVerificationRequest("user@example.com"));
+
+        assertThat(user.getVerificationToken()).isEqualTo("new-token");
+        assertThat(user.getVerificationTokenExpiresAt()).isAfter(Instant.now());
+        verify(userRepository).save(user);
+        verify(emailService).sendVerificationEmail("user@example.com", "new-token");
     }
 }

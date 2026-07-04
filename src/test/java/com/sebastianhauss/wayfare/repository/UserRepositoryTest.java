@@ -60,4 +60,21 @@ class UserRepositoryTest {
         assertThat(result).extracting(User::getEmail)
                 .doesNotContain("recently-deleted-repo-test@example.com", "active-repo-test@example.com");
     }
+
+    @Test
+    void findByVerificationToken_returnsSavedUser() {
+        User user = new User();
+        user.setEmail("verify-repo-test@example.com");
+        user.setPasswordHash("hashed");
+        user.setEmailVerified(false);
+        user.setVerificationToken("some-verification-token");
+        repository.saveAndFlush(user);
+
+        assertThat(repository.findByVerificationToken("some-verification-token")).isPresent();
+    }
+
+    @Test
+    void findByVerificationToken_returnsEmpty_whenTokenDoesNotExist() {
+        assertThat(repository.findByVerificationToken("no-such-token")).isEmpty();
+    }
 }

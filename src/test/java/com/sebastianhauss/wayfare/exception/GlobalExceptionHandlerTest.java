@@ -95,12 +95,13 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleAccountDeleted_returns403WithMessage() {
+    void handleAccountDeleted_returns403WithMessageAndCode() {
         ResponseEntity<ErrorResponse> response = handler.handleAccountDeleted(
                 new AccountDeletedException("This account has been deleted"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody().error()).isEqualTo("This account has been deleted");
+        assertThat(response.getBody().code()).isEqualTo("ACCOUNT_DELETED");
     }
 
     @Test
@@ -111,5 +112,24 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody().error())
                 .isEqualTo("This account was permanently deleted and can no longer be reactivated");
+    }
+
+    @Test
+    void handleEmailNotVerified_returns403WithMessageAndCode() {
+        ResponseEntity<ErrorResponse> response = handler.handleEmailNotVerified(
+                new EmailNotVerifiedException("Please verify your email before logging in"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().error()).isEqualTo("Please verify your email before logging in");
+        assertThat(response.getBody().code()).isEqualTo("EMAIL_NOT_VERIFIED");
+    }
+
+    @Test
+    void handleInvalidVerificationToken_returns400WithMessage() {
+        ResponseEntity<ErrorResponse> response = handler.handleInvalidVerificationToken(
+                new InvalidVerificationTokenException("Invalid or expired verification link"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().error()).isEqualTo("Invalid or expired verification link");
     }
 }
