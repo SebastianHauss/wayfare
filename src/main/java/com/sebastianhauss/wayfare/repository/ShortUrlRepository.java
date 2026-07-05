@@ -1,6 +1,8 @@
 package com.sebastianhauss.wayfare.repository;
 
 import com.sebastianhauss.wayfare.model.ShortUrl;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -18,6 +20,8 @@ public interface ShortUrlRepository extends JpaRepository<ShortUrl, Long> {
     Optional<ShortUrl> findByShortCodeAndUserId(String shortCode, Long userId);
 
     List<ShortUrl> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    Page<ShortUrl> findByUserId(Long userId, Pageable pageable);
 
     @Modifying(clearAutomatically = true)
     @Query("UPDATE ShortUrl s SET s.clickCount = s.clickCount + 1 WHERE s.shortCode = :shortCode")

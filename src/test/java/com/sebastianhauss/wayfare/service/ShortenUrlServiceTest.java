@@ -1,6 +1,7 @@
 package com.sebastianhauss.wayfare.service;
 
 import com.sebastianhauss.wayfare.dto.LinkResponse;
+import com.sebastianhauss.wayfare.dto.PagedResponse;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.exception.AliasUnavailableException;
@@ -18,6 +19,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -318,15 +321,18 @@ class ShortenUrlServiceTest {
         shortUrl.setShortCode("abc");
         shortUrl.setOriginalUrl("https://example.com");
         shortUrl.setClickCount(3L);
-        when(shortUrlRepository.findByUserIdOrderByCreatedAtDesc(42L)).thenReturn(List.of(shortUrl));
+        when(shortUrlRepository.findByUserId(eq(42L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(shortUrl)));
 
-        List<LinkResponse> result = shortenUrlService.getMyLinks();
+        PagedResponse<LinkResponse> result = shortenUrlService.getMyLinks(0, 10);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).shortCode()).isEqualTo("abc");
-        assertThat(result.get(0).shortUrl()).isEqualTo("http://localhost:8080/abc");
-        assertThat(result.get(0).originalUrl()).isEqualTo("https://example.com");
-        assertThat(result.get(0).clickCount()).isEqualTo(3L);
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).shortCode()).isEqualTo("abc");
+        assertThat(result.content().get(0).shortUrl()).isEqualTo("http://localhost:8080/abc");
+        assertThat(result.content().get(0).originalUrl()).isEqualTo("https://example.com");
+        assertThat(result.content().get(0).clickCount()).isEqualTo(3L);
+        assertThat(result.page()).isZero();
+        assertThat(result.totalElements()).isEqualTo(1);
     }
 
     @Test

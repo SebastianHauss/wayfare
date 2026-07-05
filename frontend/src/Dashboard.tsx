@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import * as api from './api';
-import { ArrowClockwise, ChartBar, Check, Copy, QrCode, Trash, WarningCircle } from '@phosphor-icons/react';
+import { ArrowClockwise, CaretLeft, CaretRight, ChartBar, Check, Copy, QrCode, Trash, WarningCircle } from '@phosphor-icons/react';
 import { LinkStatsModal } from './LinkStatsModal';
 import type { LinkResponse, MeResponse } from './types';
 
+const LINKS_PAGE_SIZE = 10;
 const SHRINK_DISTANCE = 200;
 const TITLE_MAX = 64;
 const TITLE_MIN = 22;
@@ -56,6 +57,9 @@ export function Dashboard({
   onLoginClick: () => void;
 }) {
   const [links, setLinks] = useState<LinkResponse[]>([]);
+  const [linksPage, setLinksPage] = useState(0);
+  const [linksTotal, setLinksTotal] = useState(0);
+  const [linksTotalPages, setLinksTotalPages] = useState(0);
   const [loadingLinks, setLoadingLinks] = useState(true);
   const [refreshingLinks, setRefreshingLinks] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -78,7 +82,8 @@ export function Dashboard({
   useEffect(() => {
     setQrLink(null);
     setStatsLink(null);
-    loadLinks();
+    setLinksPage(0);
+    loadLinks(0);
   }, [user?.id]);
 
   useEffect(() => {
@@ -91,17 +96,26 @@ export function Dashboard({
   const titleSize = TITLE_MAX - (TITLE_MAX - TITLE_MIN) * progress;
   const heroPad = PAD_MAX - (PAD_MAX - PAD_MIN) * progress;
   const subtleOpacity = Math.max(0, 1 - progress * 1.6);
-  const totalClicks = links.reduce((sum, l) => sum + (l.clickCount ?? 0), 0);
+  const visibleLinkCount = user ? linksTotal : links.length;
+  const anonymousLimitReached = !user && links.length >= api.ANONYMOUS_LINK_LIMIT;
+  const paginationStart = linksTotal === 0 ? 0 : linksPage * LINKS_PAGE_SIZE + 1;
+  const paginationEnd = Math.min((linksPage + 1) * LINKS_PAGE_SIZE, linksTotal);
 
-  async function loadLinks(showLoading = true) {
+  async function loadLinks(page = linksPage, showLoading = true) {
     if (!user) {
       setLinks(api.getAnonymousLinks());
+      setLinksTotal(0);
+      setLinksTotalPages(0);
       setLoadingLinks(false);
       return;
     }
     if (showLoading) setLoadingLinks(true);
     try {
-      setLinks(await api.getMyLinks());
+      const response = await api.getMyLinks(page, LINKS_PAGE_SIZE);
+      setLinks(response.content);
+      setLinksPage(response.page);
+      setLinksTotal(response.totalElements);
+      setLinksTotalPages(response.totalPages);
     } finally {
       if (showLoading) setLoadingLinks(false);
     }
@@ -112,7 +126,7 @@ export function Dashboard({
     setRefreshingLinks(true);
     setRefreshStatus('idle');
     try {
-      await Promise.all([loadLinks(false), minimumSpin]);
+      await Promise.all([loadLinks(linksPage, false), minimumSpin]);
       setRefreshStatus('success');
     } catch {
       await minimumSpin;
@@ -125,6 +139,10 @@ export function Dashboard({
 
   async function handleShorten(e: React.FormEvent) {
     e.preventDefault();
+    if (anonymousLimitReached) {
+      setShortenError(`Anonymous link lists are limited to ${api.ANONYMOUS_LINK_LIMIT}. Remove one or sign up to save more.`);
+      return;
+    }
     setShortening(true);
     setShortenError('');
     try {
@@ -139,7 +157,7 @@ export function Dashboard({
       setExpiryPreset('');
       setMaxClicks('');
       if (user) {
-        await loadLinks();
+        await loadLinks(0);
       } else {
         setLinks(api.saveAnonymousLink(created));
       }
@@ -153,7 +171,8 @@ export function Dashboard({
   async function handleDelete(shortCode: string) {
     if (!confirm('Delete this link?')) return;
     await api.deleteLink(shortCode);
-    setLinks((prev) => prev.filter((l) => l.shortCode !== shortCode));
+    const nextPage = links.length === 1 && linksPage > 0 ? linksPage - 1 : linksPage;
+    await loadLinks(nextPage);
   }
 
   function handleRemoveAnonymous(shortCode: string) {
@@ -240,18 +259,12 @@ export function Dashboard({
           >
             Wayfare
           </h1>
-          {links.length > 0 && (
+          {visibleLinkCount > 0 && (
             <div
               className="mt-3 flex items-center justify-center gap-2 text-xs text-ink-soft"
               style={{ opacity: subtleOpacity }}
             >
-              <span>{links.length} link{links.length === 1 ? '' : 's'}</span>
-              {user && (
-                <>
-                  <span className="h-0.5 w-0.5 rounded-full bg-ink-soft/50" />
-                  <span>{totalClicks} click{totalClicks === 1 ? '' : 's'}</span>
-                </>
-              )}
+              <span>{visibleLinkCount} link{visibleLinkCount === 1 ? '' : 's'}</span>
             </div>
           )}
         </div>
@@ -274,7 +287,7 @@ export function Dashboard({
             />
             <button
               type="submit"
-              disabled={shortening}
+              disabled={shortening || anonymousLimitReached}
               className="shrink-0 rounded-full bg-orange px-5 py-2 text-sm font-medium text-white shadow-md shadow-orange/20 transition hover:bg-ink hover:shadow-lg disabled:opacity-50"
             >
               {shortening ? 'Shortening…' : 'Shorten'}
@@ -345,6 +358,11 @@ export function Dashboard({
             </div>
           )}
 
+          {anonymousLimitReached && (
+            <p className="mt-2 text-sm text-ink-soft">
+              Anonymous link lists are limited to {api.ANONYMOUS_LINK_LIMIT}. Remove one or sign up to save more.
+            </p>
+          )}
           {shortenError && <p className="mt-2 text-sm text-red-600">{shortenError}</p>}
         </form>
 
@@ -369,7 +387,7 @@ export function Dashboard({
         <div className="mb-3 mt-10 flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">My Links</h2>
           <div className="flex items-center gap-2">
-            {user && links.length > 0 && (
+            {user && visibleLinkCount > 0 && (
               <button
                 type="button"
                 onClick={handleRefreshLinks}
@@ -411,9 +429,9 @@ export function Dashboard({
                 )}
               </button>
             )}
-            {links.length > 0 && (
+            {visibleLinkCount > 0 && (
               <span className="rounded-full bg-orange-light/50 px-2 py-0.5 text-xs font-medium text-orange">
-                {links.length}
+                {visibleLinkCount}
               </span>
             )}
           </div>
@@ -428,93 +446,127 @@ export function Dashboard({
         )}
 
         {!loadingLinks && links.length > 0 && (
-          <ul className="divide-y divide-ink/8 overflow-hidden rounded-2xl border border-ink/10 bg-cream-card shadow-lg shadow-orange/5">
-            {links.map((link, i) => {
-              const expiryBadge = getExpiryBadge(link);
-              return (
-                <li
-                  key={link.shortCode}
-                  className="group flex animate-fade-in-up items-center justify-between gap-3 px-5 py-4 transition-colors hover:bg-orange-light/10 sm:gap-4"
-                  style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                      <a
-                        href={link.shortUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={() => handleShortLinkOpen(link)}
-                        className="min-w-0 truncate font-medium text-orange hover:underline"
-                      >
-                        {link.shortUrl.replace(/^https?:\/\//, '')}
-                      </a>
-                      {expiryBadge && (
-                        <span
-                          title={new Date(link.expiresAt!).toLocaleString()}
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            expiryBadge.expired
-                              ? 'bg-red-50 text-red-600 ring-1 ring-red-100'
-                              : 'bg-orange-light/45 text-orange ring-1 ring-orange/10'
-                          }`}
+          <>
+            <ul className="divide-y divide-ink/8 overflow-hidden rounded-2xl border border-ink/10 bg-cream-card shadow-lg shadow-orange/5">
+              {links.map((link, i) => {
+                const expiryBadge = getExpiryBadge(link);
+                return (
+                  <li
+                    key={link.shortCode}
+                    className="group flex animate-fade-in-up items-center justify-between gap-3 px-5 py-4 transition-colors hover:bg-orange-light/10 sm:gap-4"
+                    style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <a
+                          href={link.shortUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => handleShortLinkOpen(link)}
+                          className="min-w-0 truncate font-medium text-orange hover:underline"
                         >
-                          {expiryBadge.label}
-                        </span>
-                      )}
+                          {link.shortUrl.replace(/^https?:\/\//, '')}
+                        </a>
+                        {expiryBadge && (
+                          <span
+                            title={new Date(link.expiresAt!).toLocaleString()}
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              expiryBadge.expired
+                                ? 'bg-red-50 text-red-600 ring-1 ring-red-100'
+                                : 'bg-orange-light/45 text-orange ring-1 ring-orange/10'
+                            }`}
+                          >
+                            {expiryBadge.label}
+                          </span>
+                        )}
+                      </div>
+                      <p className="truncate text-sm text-ink-soft" title={link.originalUrl}>
+                        {link.originalUrl}
+                      </p>
                     </div>
-                    <p className="truncate text-sm text-ink-soft" title={link.originalUrl}>
-                      {link.originalUrl}
-                    </p>
-                  </div>
-                  <div className="hidden shrink-0 text-right text-sm text-ink-soft sm:block">
-                    {user && <div>{link.clickCount ?? 0} clicks</div>}
-                    <div className="text-xs text-ink-soft/80">
-                      {new Date(link.createdAt).toLocaleDateString()}
+                    <div className="hidden shrink-0 text-right text-sm text-ink-soft sm:block">
+                      {user && <div>{link.clickCount ?? 0} clicks</div>}
+                      <div className="text-xs text-ink-soft/80">
+                        {new Date(link.createdAt).toLocaleDateString()}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex shrink-0 items-center justify-end gap-1">
-                    <button
-                      onClick={() => handleCopy(link.shortUrl, link.shortCode)}
-                      title={copiedCode === link.shortCode ? 'Copied' : 'Copy link'}
-                      aria-label={copiedCode === link.shortCode ? 'Copied' : 'Copy link'}
-                      className={`rounded-full border p-2 transition ${
-                        copiedCode === link.shortCode
-                          ? 'border-orange text-orange'
-                          : 'border-ink/15 text-ink-soft hover:border-orange hover:text-orange'
-                      }`}
-                    >
-                      {copiedCode === link.shortCode ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    </button>
-                    <button
-                      onClick={() => setQrLink(link)}
-                      title="Show QR code"
-                      aria-label="Show QR code"
-                      className="rounded-full border border-ink/15 p-2 text-ink-soft transition hover:border-orange hover:text-orange"
-                    >
-                      <QrCode className="h-4 w-4" />
-                    </button>
-                    {user && (
+                    <div className="flex shrink-0 items-center justify-end gap-1">
                       <button
-                        onClick={() => setStatsLink(link)}
-                        title="View stats"
-                        aria-label="View stats"
+                        onClick={() => handleCopy(link.shortUrl, link.shortCode)}
+                        title={copiedCode === link.shortCode ? 'Copied' : 'Copy link'}
+                        aria-label={copiedCode === link.shortCode ? 'Copied' : 'Copy link'}
+                        className={`rounded-full border p-2 transition ${
+                          copiedCode === link.shortCode
+                            ? 'border-orange text-orange'
+                            : 'border-ink/15 text-ink-soft hover:border-orange hover:text-orange'
+                        }`}
+                      >
+                        {copiedCode === link.shortCode ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </button>
+                      <button
+                        onClick={() => setQrLink(link)}
+                        title="Show QR code"
+                        aria-label="Show QR code"
                         className="rounded-full border border-ink/15 p-2 text-ink-soft transition hover:border-orange hover:text-orange"
                       >
-                        <ChartBar className="h-4 w-4" />
+                        <QrCode className="h-4 w-4" />
                       </button>
-                    )}
-                    <button
-                      onClick={() => (user ? handleDelete(link.shortCode) : handleRemoveAnonymous(link.shortCode))}
-                      title={user ? 'Delete link' : 'Remove link'}
-                      aria-label={user ? 'Delete link' : 'Remove link'}
-                      className="rounded-full border border-transparent p-2 text-ink-soft transition hover:border-red-200 hover:text-red-600"
-                    >
-                      <Trash className="h-4 w-4" />
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                      {user && (
+                        <button
+                          onClick={() => setStatsLink(link)}
+                          title="View stats"
+                          aria-label="View stats"
+                          className="rounded-full border border-ink/15 p-2 text-ink-soft transition hover:border-orange hover:text-orange"
+                        >
+                          <ChartBar className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => (user ? handleDelete(link.shortCode) : handleRemoveAnonymous(link.shortCode))}
+                        title={user ? 'Delete link' : 'Remove link'}
+                        aria-label={user ? 'Delete link' : 'Remove link'}
+                        className="rounded-full border border-transparent p-2 text-ink-soft transition hover:border-red-200 hover:text-red-600"
+                      >
+                        <Trash className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            {user && linksTotal > 0 && (
+              <div className="mt-4 flex items-center justify-between gap-3 text-sm text-ink-soft">
+                <span>
+                  {paginationStart}-{paginationEnd} of {linksTotal}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => loadLinks(linksPage - 1)}
+                    disabled={linksPage === 0 || loadingLinks}
+                    title="Previous page"
+                    aria-label="Previous page"
+                    className="rounded-full border border-ink/15 p-2 transition hover:border-orange hover:text-orange disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <CaretLeft className="h-4 w-4" />
+                  </button>
+                  <span className="min-w-16 text-center text-xs font-medium">
+                    Page {linksPage + 1} of {linksTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => loadLinks(linksPage + 1)}
+                    disabled={linksTotalPages <= 1 || linksPage >= linksTotalPages - 1 || loadingLinks}
+                    title="Next page"
+                    aria-label="Next page"
+                    className="rounded-full border border-ink/15 p-2 transition hover:border-orange hover:text-orange disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <CaretRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {statsLink && (

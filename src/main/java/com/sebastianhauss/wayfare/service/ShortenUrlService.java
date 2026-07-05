@@ -3,6 +3,7 @@ package com.sebastianhauss.wayfare.service;
 import com.sebastianhauss.wayfare.dto.ClickMetadata;
 import com.sebastianhauss.wayfare.dto.LinkResponse;
 import com.sebastianhauss.wayfare.dto.LinkStatsResponse;
+import com.sebastianhauss.wayfare.dto.PagedResponse;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.exception.AliasUnavailableException;
@@ -19,6 +20,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -152,11 +155,10 @@ public class ShortenUrlService {
     }
 
     @Transactional(readOnly = true)
-    public List<LinkResponse> getMyLinks() {
+    public PagedResponse<LinkResponse> getMyLinks(int page, int size) {
         Long userId = currentUserId();
-        return shortUrlRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(this::toLinkResponse)
-                .toList();
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return PagedResponse.from(shortUrlRepository.findByUserId(userId, pageRequest).map(this::toLinkResponse));
     }
 
     @Transactional(readOnly = true)

@@ -1,10 +1,11 @@
-import type { LinkResponse, LinkStats, MeResponse, MessageResponse } from './types';
+import type { LinkResponse, LinkStats, MeResponse, MessageResponse, PaginatedResponse } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const CSRF_HEADER = 'X-Requested-With';
 const CSRF_HEADER_VALUE = 'WayfareApp';
 
 const ANONYMOUS_LINKS_KEY = 'wayfare.anonymousLinks';
+export const ANONYMOUS_LINK_LIMIT = 10;
 
 export class ApiError extends Error {
   status: number;
@@ -104,8 +105,9 @@ export function getCurrentUser(): Promise<MeResponse> {
   return request<MeResponse>('/api/auth/me');
 }
 
-export function getMyLinks(): Promise<LinkResponse[]> {
-  return request<LinkResponse[]>('/api/links');
+export function getMyLinks(page = 0, size = 10): Promise<PaginatedResponse<LinkResponse>> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  return request<PaginatedResponse<LinkResponse>>(`/api/links?${params}`);
 }
 
 export function getLinkStats(shortCode: string): Promise<LinkStats> {
@@ -155,14 +157,20 @@ export async function deleteAccount(password: string): Promise<void> {
 
 export function getAnonymousLinks(): LinkResponse[] {
   try {
-    return JSON.parse(localStorage.getItem(ANONYMOUS_LINKS_KEY) ?? '[]');
+    const links = JSON.parse(localStorage.getItem(ANONYMOUS_LINKS_KEY) ?? '[]');
+    if (!Array.isArray(links)) return [];
+    const limitedLinks = links.slice(0, ANONYMOUS_LINK_LIMIT);
+    if (limitedLinks.length !== links.length) {
+      localStorage.setItem(ANONYMOUS_LINKS_KEY, JSON.stringify(limitedLinks));
+    }
+    return limitedLinks;
   } catch {
     return [];
   }
 }
 
 export function saveAnonymousLink(link: LinkResponse): LinkResponse[] {
-  const links = [link, ...getAnonymousLinks()];
+  const links = [link, ...getAnonymousLinks()].slice(0, ANONYMOUS_LINK_LIMIT);
   localStorage.setItem(ANONYMOUS_LINKS_KEY, JSON.stringify(links));
   return links;
 }
