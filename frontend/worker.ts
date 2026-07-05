@@ -1,6 +1,9 @@
 interface Env {
   ASSETS: Fetcher;
   BACKEND_URL: string;
+  // Shared secret proving this request came through the Worker, not straight to
+  // the origin. Set via `wrangler secret put ORIGIN_SHARED_SECRET`.
+  ORIGIN_SHARED_SECRET?: string;
 }
 
 // Cloudflare serves any matching file in dist/ before this runs, so we only
@@ -33,6 +36,14 @@ export default {
     proxied.headers.set('x-forwarded-host', url.host);
     proxied.headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
     proxied.headers.set('x-forwarded-port', url.protocol === 'https:' ? '443' : '80');
+
+    // Prove to the origin that this request came through the Worker. The origin
+    // rejects anything without it, so the trust headers below can't be forged by
+    // hitting the backend directly. Client-supplied copies are overwritten here.
+    proxied.headers.delete('x-origin-auth');
+    if (env.ORIGIN_SHARED_SECRET) {
+      proxied.headers.set('x-origin-auth', env.ORIGIN_SHARED_SECRET);
+    }
 
     // Cloudflare exposes the visitor's country on request.cf (not as a header the
     // origin would otherwise see), so forward it explicitly for click analytics.
