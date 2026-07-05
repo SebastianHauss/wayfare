@@ -36,6 +36,20 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(ex.getMessage()));
     }
 
+    @ExceptionHandler(UnsafeUrlException.class)
+    public ResponseEntity<ErrorResponse> handleUnsafeUrl(UnsafeUrlException ex) {
+        log.warn("Unsafe URL rejected: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(ex.getMessage(), "UNSAFE_URL"));
+    }
+
+    @ExceptionHandler(AliasUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleAliasUnavailable(AliasUnavailableException ex) {
+        log.warn("Custom alias rejected: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(ex.getMessage(), "ALIAS_UNAVAILABLE"));
+    }
+
     @ExceptionHandler(LinkExpiredException.class)
     public ResponseEntity<ErrorResponse> handleExpired(LinkExpiredException ex) {
         log.warn("Expired link accessed: {}", ex.getMessage());
@@ -52,6 +66,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
         log.warn("Login rejected: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(AuthenticationRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationRequired(AuthenticationRequiredException ex) {
+        log.warn("Authentication required: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse(ex.getMessage(), "AUTHENTICATION_REQUIRED"));
     }
 
     @ExceptionHandler(InvalidRefreshTokenException.class)

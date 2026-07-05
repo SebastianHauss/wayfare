@@ -1,13 +1,19 @@
 package com.sebastianhauss.wayfare.service;
 
 import com.sebastianhauss.wayfare.dto.LinkResponse;
+import com.sebastianhauss.wayfare.dto.PagedResponse;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
+import com.sebastianhauss.wayfare.exception.AliasUnavailableException;
+import com.sebastianhauss.wayfare.exception.AuthenticationRequiredException;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
 import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
+import com.sebastianhauss.wayfare.exception.UnsafeUrlException;
 import com.sebastianhauss.wayfare.model.ShortUrl;
+import com.sebastianhauss.wayfare.repository.ClickEventRepository;
 import com.sebastianhauss.wayfare.repository.ShortUrlRepository;
+import com.sebastianhauss.wayfare.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +21,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -30,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -42,22 +51,44 @@ class ShortenUrlServiceTest {
     private ShortUrlRepository shortUrlRepository;
 
     @Mock
+    private ClickEventRepository clickEventRepository;
+
+    @Mock
     private RedisTemplate<String, String> redisTemplate;
 
     @Mock
+    private UserRepository userRepository;
+
+    @Mock
     private ValueOperations<String, String> valueOperations;
+
+    @Mock
+    private SafeBrowsingService safeBrowsingService;
 
     private ShortenUrlService shortenUrlService;
 
     @BeforeEach
     void setUp() {
-        shortenUrlService = new ShortenUrlService(shortUrlRepository, redisTemplate);
+        shortenUrlService = new ShortenUrlService(
+                shortUrlRepository, clickEventRepository, redisTemplate, userRepository, safeBrowsingService);
         ReflectionTestUtils.setField(shortenUrlService, "baseUrl", "http://localhost:8080");
     }
 
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void shorten_rejectsUrlFlaggedBySafeBrowsing() {
+        ShortenRequest request = new ShortenRequest("http://malware.example");
+        doThrow(new UnsafeUrlException("This URL was flagged as unsafe and can't be shortened"))
+                .when(safeBrowsingService).verifySafe("http://malware.example");
+
+        assertThatThrownBy(() -> shortenUrlService.shorten(request))
+                .isInstanceOf(UnsafeUrlException.class);
+
+        verify(shortUrlRepository, never()).save(any());
     }
 
     @Test
@@ -73,6 +104,74 @@ class ShortenUrlServiceTest {
         assertThat(response.shortUrl()).isEqualTo("http://localhost:8080/5");
         assertThat(response.originalUrl()).isEqualTo("https://example.com/some/long/path");
         verify(shortUrlRepository, times(2)).save(any(ShortUrl.class));
+    }
+
+    @Test
+    void shorten_usesCustomAlias_whenProvided() {
+        authenticateExistingUser(42L);
+        when(shortUrlRepository.existsByShortCode("my-brand")).thenReturn(false);
+        ShortUrl saved = new ShortUrl();
+        saved.setId(5L);
+        saved.setShortCode("my-brand");
+        saved.setOriginalUrl("https://example.com");
+        when(shortUrlRepository.saveAndFlush(any(ShortUrl.class))).thenReturn(saved);
+
+        ShortenResponse response = shortenUrlService.shorten(
+                new ShortenRequest("https://example.com", "my-brand", null, null));
+
+        assertThat(response.shortCode()).isEqualTo("my-brand");
+        assertThat(response.shortUrl()).isEqualTo("http://localhost:8080/my-brand");
+        verify(shortUrlRepository, never()).save(any());
+    }
+
+    @Test
+    void shorten_throwsAuthenticationRequired_whenAnonymousUsesCustomAlias() {
+        assertThatThrownBy(() -> shortenUrlService.shorten(
+                new ShortenRequest("https://example.com", "my-brand", null, null)))
+                .isInstanceOf(AuthenticationRequiredException.class);
+
+        verify(shortUrlRepository, never()).existsByShortCode(any());
+        verify(shortUrlRepository, never()).save(any());
+        verify(shortUrlRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shorten_throwsAliasUnavailable_whenAliasAlreadyTaken() {
+        authenticateExistingUser(42L);
+        when(shortUrlRepository.existsByShortCode("taken")).thenReturn(true);
+
+        assertThatThrownBy(() -> shortenUrlService.shorten(
+                new ShortenRequest("https://example.com", "taken", null, null)))
+                .isInstanceOf(AliasUnavailableException.class);
+
+        verify(shortUrlRepository, never()).save(any());
+        verify(shortUrlRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shorten_throwsAliasUnavailable_whenAliasIsReserved() {
+        authenticateExistingUser(42L);
+
+        assertThatThrownBy(() -> shortenUrlService.shorten(
+                new ShortenRequest("https://example.com", "API", null, null)))
+                .isInstanceOf(AliasUnavailableException.class);
+
+        verify(shortUrlRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shorten_extendsGeneratedCode_whenItCollidesWithExistingAlias() {
+        ShortUrl saved = new ShortUrl();
+        saved.setId(5L);
+        saved.setOriginalUrl("https://example.com");
+        when(shortUrlRepository.save(any(ShortUrl.class))).thenReturn(saved);
+        // Base62(5) == "5" is squatted by a custom alias, so the code gets extended once.
+        when(shortUrlRepository.existsByShortCode(any())).thenReturn(true, false);
+
+        ShortenResponse response = shortenUrlService.shorten(new ShortenRequest("https://example.com"));
+
+        assertThat(response.shortCode()).startsWith("5");
+        assertThat(response.shortCode()).hasSizeGreaterThan(1);
     }
 
     @Test
@@ -98,8 +197,7 @@ class ShortenUrlServiceTest {
 
     @Test
     void shorten_setsUserId_whenAuthenticated() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
+        authenticateExistingUser(42L);
 
         ShortUrl saved = new ShortUrl();
         saved.setId(5L);
@@ -110,6 +208,21 @@ class ShortenUrlServiceTest {
         ArgumentCaptor<ShortUrl> captor = ArgumentCaptor.forClass(ShortUrl.class);
         verify(shortUrlRepository, times(2)).save(captor.capture());
         assertThat(captor.getAllValues().get(0).getUserId()).isEqualTo(42L);
+    }
+
+    @Test
+    void shorten_treatsStaleAuthenticationAsAnonymous() {
+        authenticateUser(42L);
+        when(userRepository.existsById(42L)).thenReturn(false);
+        ShortUrl saved = new ShortUrl();
+        saved.setId(5L);
+        when(shortUrlRepository.save(any(ShortUrl.class))).thenReturn(saved);
+
+        shortenUrlService.shorten(new ShortenRequest("https://example.com"));
+
+        ArgumentCaptor<ShortUrl> captor = ArgumentCaptor.forClass(ShortUrl.class);
+        verify(shortUrlRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0).getUserId()).isNull();
     }
 
     @Test
@@ -234,28 +347,29 @@ class ShortenUrlServiceTest {
 
     @Test
     void getMyLinks_returnsMappedLinksForCurrentUser() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
+        authenticateExistingUser(42L);
 
         ShortUrl shortUrl = new ShortUrl();
         shortUrl.setShortCode("abc");
         shortUrl.setOriginalUrl("https://example.com");
         shortUrl.setClickCount(3L);
-        when(shortUrlRepository.findByUserIdOrderByCreatedAtDesc(42L)).thenReturn(List.of(shortUrl));
+        when(shortUrlRepository.findByUserId(eq(42L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(shortUrl)));
 
-        List<LinkResponse> result = shortenUrlService.getMyLinks();
+        PagedResponse<LinkResponse> result = shortenUrlService.getMyLinks(0, 10);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).shortCode()).isEqualTo("abc");
-        assertThat(result.get(0).shortUrl()).isEqualTo("http://localhost:8080/abc");
-        assertThat(result.get(0).originalUrl()).isEqualTo("https://example.com");
-        assertThat(result.get(0).clickCount()).isEqualTo(3L);
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).shortCode()).isEqualTo("abc");
+        assertThat(result.content().get(0).shortUrl()).isEqualTo("http://localhost:8080/abc");
+        assertThat(result.content().get(0).originalUrl()).isEqualTo("https://example.com");
+        assertThat(result.content().get(0).clickCount()).isEqualTo(3L);
+        assertThat(result.page()).isZero();
+        assertThat(result.totalElements()).isEqualTo(1);
     }
 
     @Test
     void deleteLink_deletesLinkAndEvictsCache_whenOwnedByCurrentUser() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
+        authenticateExistingUser(42L);
 
         ShortUrl shortUrl = new ShortUrl();
         shortUrl.setShortCode("abc");
@@ -269,13 +383,22 @@ class ShortenUrlServiceTest {
 
     @Test
     void deleteLink_throwsNotFound_whenNotOwnedByCurrentUser() {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
+        authenticateExistingUser(42L);
 
         when(shortUrlRepository.findByShortCodeAndUserId("abc", 42L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> shortenUrlService.deleteLink("abc"))
                 .isInstanceOf(ShortenCodeNotFoundException.class);
         verify(shortUrlRepository, never()).delete(any());
+    }
+
+    private void authenticateExistingUser(Long userId) {
+        authenticateUser(userId);
+        when(userRepository.existsById(userId)).thenReturn(true);
+    }
+
+    private void authenticateUser(Long userId) {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userId, null, java.util.List.of()));
     }
 }

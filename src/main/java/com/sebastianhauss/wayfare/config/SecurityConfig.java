@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sebastianhauss.wayfare.dto.ErrorResponse;
 import com.sebastianhauss.wayfare.security.CsrfHeaderFilter;
 import com.sebastianhauss.wayfare.security.JwtAuthenticationFilter;
+import com.sebastianhauss.wayfare.security.OriginAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -32,6 +33,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CsrfHeaderFilter csrfHeaderFilter;
+    private final OriginAuthFilter originAuthFilter;
 
     @Value("${app.allowed-origins}")
     private String allowedOrigins;
@@ -58,7 +60,10 @@ public class SecurityConfig {
                         },
                         request -> request.getRequestURI().startsWith("/api/")))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(csrfHeaderFilter, JwtAuthenticationFilter.class);
+                .addFilterBefore(csrfHeaderFilter, JwtAuthenticationFilter.class)
+                // Runs first: reject direct-to-origin traffic before any header
+                // set by the trusted Worker (country, forwarded-*) is honored.
+                .addFilterBefore(originAuthFilter, CsrfHeaderFilter.class);
         return http.build();
     }
 

@@ -1,9 +1,11 @@
 package com.sebastianhauss.wayfare.controller;
 
+import com.sebastianhauss.wayfare.dto.ClickMetadata;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.service.ShortenUrlService;
 import com.sebastianhauss.wayfare.util.QrCodeGenerator;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,8 +27,13 @@ public class ShortenController {
     }
 
     @GetMapping("/{code}")
-    public ResponseEntity<Void> get(@PathVariable String code) {
-        String originalUrl = shortenUrlService.getUrl(code);
+    public ResponseEntity<Void> get(@PathVariable String code, HttpServletRequest request) {
+        ClickMetadata metadata = ClickMetadata.from(
+                request.getHeader("Referer"),
+                request.getHeader("User-Agent"),
+                // Set by the Cloudflare Worker from request.cf.country; absent in local dev.
+                request.getHeader("X-Client-Country"));
+        String originalUrl = shortenUrlService.getUrl(code, metadata);
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(originalUrl))
                 .build();
