@@ -6,7 +6,7 @@ Wayfare is a minimal link shortener for turning long URLs into clean, shareable
 links. It supports quick anonymous shortening, optional sign-in for managing
 saved links, click tracking, and QR-code downloads.
 
-[Open Wayfare](https://wayfare-53b7.onrender.com)
+[Open Wayfare](https://wyfr.link)
 
 ![Wayfare dashboard](docs/wayfare-dashboard.png)
 
