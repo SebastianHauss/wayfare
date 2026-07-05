@@ -35,7 +35,8 @@ class ShortenControllerTest {
     @Test
     void post_returnsCreatedWithShortenResponse() {
         ShortenRequest request = new ShortenRequest("https://example.com");
-        ShortenResponse response = new ShortenResponse("abc", "http://localhost:8080/abc", "https://example.com");
+        ShortenResponse response =
+                new ShortenResponse("abc", "http://localhost:8080/abc", "https://example.com", null, null);
         when(shortenUrlService.shorten(request)).thenReturn(response);
 
         ResponseEntity<ShortenResponse> result = shortenController.post(request);

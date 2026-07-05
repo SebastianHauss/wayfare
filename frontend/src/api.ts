@@ -116,14 +116,26 @@ interface ShortenApiResponse {
   shortCode: string;
   shortUrl: string;
   originalUrl: string;
+  expiresAt: string | null;
+  maxClicks: number | null;
 }
 
-export async function shorten(url: string): Promise<LinkResponse> {
+export interface ShortenOptions {
+  alias?: string;
+  expiresAt?: string | null;
+  maxClicks?: number | null;
+}
+
+export async function shorten(url: string, options: ShortenOptions = {}): Promise<LinkResponse> {
+  const body: Record<string, unknown> = { url };
+  if (options.alias) body.alias = options.alias;
+  if (options.expiresAt) body.expiresAt = options.expiresAt;
+  if (options.maxClicks) body.maxClicks = options.maxClicks;
   const created = await request<ShortenApiResponse>('/api/shorten', {
     method: 'POST',
-    body: JSON.stringify({ url }),
+    body: JSON.stringify(body),
   });
-  return { ...created, createdAt: new Date().toISOString(), clickCount: 0, expiresAt: null, maxClicks: null };
+  return { ...created, createdAt: new Date().toISOString(), clickCount: 0 };
 }
 
 export function deleteLink(shortCode: string): Promise<void> {

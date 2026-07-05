@@ -18,6 +18,7 @@ saved links, click tracking, and QR-code downloads.
 - Copy, remove, and organize saved links from a clean dashboard.
 - Track clicks on signed-in links.
 - Generate and download QR codes for any shortened link.
+- Pick a custom alias (vanity code) instead of a random one.
 - Create links that can expire by date or click count.
 
 ## Why

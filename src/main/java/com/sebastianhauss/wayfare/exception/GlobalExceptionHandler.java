@@ -36,6 +36,13 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(ex.getMessage()));
     }
 
+    @ExceptionHandler(AliasUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleAliasUnavailable(AliasUnavailableException ex) {
+        log.warn("Custom alias rejected: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(ex.getMessage(), "ALIAS_UNAVAILABLE"));
+    }
+
     @ExceptionHandler(LinkExpiredException.class)
     public ResponseEntity<ErrorResponse> handleExpired(LinkExpiredException ex) {
         log.warn("Expired link accessed: {}", ex.getMessage());

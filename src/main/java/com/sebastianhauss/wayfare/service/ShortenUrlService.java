@@ -5,6 +5,7 @@ import com.sebastianhauss.wayfare.dto.LinkResponse;
 import com.sebastianhauss.wayfare.dto.LinkStatsResponse;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
+import com.sebastianhauss.wayfare.exception.AliasUnavailableException;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
 import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
@@ -16,6 +17,7 @@ import com.sebastianhauss.wayfare.util.Base62Encoder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -26,6 +28,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +42,9 @@ public class ShortenUrlService {
 
     private static final int STATS_WINDOW_DAYS = 30;
 
+    // Codes that collide with real backend/frontend routes must not be claimable as aliases.
+    private static final Set<String> RESERVED_ALIASES = Set.of("api", "qr", "verify-email", "assets");
+
     @Value("${app.base-url}")
     private String baseUrl;
 
@@ -46,18 +53,59 @@ public class ShortenUrlService {
         if (request.url().startsWith(baseUrl)) {
             throw new InvalidUrlException("Cannot shorten a URL that points back to this service");
         }
+        String alias = request.alias();
+        if (alias != null) {
+            validateAliasAvailable(alias);
+        }
+
         ShortUrl shortUrl = new ShortUrl();
         shortUrl.setOriginalUrl(request.url());
         shortUrl.setExpiresAt(request.expiresAt());
         shortUrl.setMaxClicks(request.maxClicks());
         shortUrl.setUserId(currentUserId());
-        ShortUrl saved = shortUrlRepository.save(shortUrl);
-        String shortCode = Base62Encoder.encode(saved.getId());
-        saved.setShortCode(shortCode);
-        ShortUrl updated = shortUrlRepository.save(saved);
-        String shortUrlString = baseUrl + "/" + updated.getShortCode();
-        log.info("Created short URL: {} -> {}", updated.getShortCode(), updated.getOriginalUrl());
-        return new ShortenResponse(updated.getShortCode(), shortUrlString, updated.getOriginalUrl());
+
+        ShortUrl saved;
+        if (alias != null) {
+            shortUrl.setShortCode(alias);
+            try {
+                saved = shortUrlRepository.saveAndFlush(shortUrl);
+            } catch (DataIntegrityViolationException e) {
+                // Lost the race against a concurrent request claiming the same alias.
+                throw new AliasUnavailableException("That custom alias is already taken");
+            }
+        } else {
+            saved = shortUrlRepository.save(shortUrl);
+            saved.setShortCode(generateUniqueCode(saved.getId()));
+            saved = shortUrlRepository.save(saved);
+        }
+
+        String shortUrlString = baseUrl + "/" + saved.getShortCode();
+        log.info("Created short URL: {} -> {}", saved.getShortCode(), saved.getOriginalUrl());
+        return new ShortenResponse(
+                saved.getShortCode(),
+                shortUrlString,
+                saved.getOriginalUrl(),
+                saved.getExpiresAt(),
+                saved.getMaxClicks());
+    }
+
+    private void validateAliasAvailable(String alias) {
+        if (RESERVED_ALIASES.contains(alias.toLowerCase())) {
+            throw new AliasUnavailableException("That custom alias is reserved");
+        }
+        if (shortUrlRepository.existsByShortCode(alias)) {
+            throw new AliasUnavailableException("That custom alias is already taken");
+        }
+    }
+
+    // Auto-generated codes are Base62 of the row id, unique among themselves. A
+    // custom alias may nonetheless already occupy that code, so extend it until free.
+    private String generateUniqueCode(Long id) {
+        String code = Base62Encoder.encode(id);
+        while (shortUrlRepository.existsByShortCode(code)) {
+            code += Base62Encoder.encode(ThreadLocalRandom.current().nextLong(1, 62));
+        }
+        return code;
     }
 
     public String getUrl(String code) {

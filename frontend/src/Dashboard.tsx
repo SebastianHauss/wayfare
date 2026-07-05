@@ -10,6 +10,14 @@ const TITLE_MIN = 22;
 const PAD_MAX = 32;
 const PAD_MIN = 12;
 
+const EXPIRY_PRESETS: { label: string; value: string; ms: number | null }[] = [
+  { label: 'Never', value: '', ms: null },
+  { label: '1 hour', value: '1h', ms: 60 * 60 * 1000 },
+  { label: '1 day', value: '1d', ms: 24 * 60 * 60 * 1000 },
+  { label: '1 week', value: '7d', ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: '1 month', value: '30d', ms: 30 * 24 * 60 * 60 * 1000 },
+];
+
 export function Dashboard({
   user,
   onLogout,
@@ -26,6 +34,10 @@ export function Dashboard({
   const [newUrl, setNewUrl] = useState('');
   const [shortening, setShortening] = useState(false);
   const [shortenError, setShortenError] = useState('');
+  const [showOptions, setShowOptions] = useState(false);
+  const [alias, setAlias] = useState('');
+  const [expiryPreset, setExpiryPreset] = useState('');
+  const [maxClicks, setMaxClicks] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [qrLink, setQrLink] = useState<LinkResponse | null>(null);
   const [statsLink, setStatsLink] = useState<LinkResponse | null>(null);
@@ -70,8 +82,16 @@ export function Dashboard({
     setShortening(true);
     setShortenError('');
     try {
-      const created = await api.shorten(newUrl);
+      const preset = EXPIRY_PRESETS.find((p) => p.value === expiryPreset);
+      const created = await api.shorten(newUrl, {
+        alias: alias.trim() || undefined,
+        expiresAt: preset?.ms ? new Date(Date.now() + preset.ms).toISOString() : null,
+        maxClicks: maxClicks.trim() ? Number(maxClicks) : null,
+      });
       setNewUrl('');
+      setAlias('');
+      setExpiryPreset('');
+      setMaxClicks('');
       if (user) {
         await loadLinks();
       } else {
@@ -194,6 +214,65 @@ export function Dashboard({
               {shortening ? 'Shortening…' : 'Shorten'}
             </button>
           </div>
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowOptions((v) => !v)}
+              className="text-xs font-medium text-ink-soft transition hover:text-orange"
+            >
+              {showOptions ? 'Hide options' : 'Customize'}
+            </button>
+          </div>
+
+          {showOptions && (
+            <div className="mt-1 grid animate-fade-in-up gap-4 rounded-2xl border border-ink/10 bg-cream-card p-4 shadow-lg shadow-orange/5 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  Custom alias
+                </label>
+                <input
+                  type="text"
+                  value={alias}
+                  onChange={(e) => setAlias(e.target.value)}
+                  placeholder="my-brand"
+                  pattern="[A-Za-z0-9_-]{3,32}"
+                  title="3–32 characters: letters, numbers, hyphens or underscores"
+                  className="w-full rounded-xl border border-ink/15 bg-cream px-3 py-2 text-sm text-ink outline-none transition focus:border-orange focus:ring-2 focus:ring-orange/20"
+                />
+                <p className="mt-1 text-xs text-ink-soft/70">Leave blank for a random code.</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  Expires
+                </label>
+                <select
+                  value={expiryPreset}
+                  onChange={(e) => setExpiryPreset(e.target.value)}
+                  className="w-full rounded-xl border border-ink/15 bg-cream px-3 py-2 text-sm text-ink outline-none transition focus:border-orange focus:ring-2 focus:ring-orange/20"
+                >
+                  {EXPIRY_PRESETS.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                  Max clicks
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={maxClicks}
+                  onChange={(e) => setMaxClicks(e.target.value)}
+                  placeholder="Unlimited"
+                  className="w-full rounded-xl border border-ink/15 bg-cream px-3 py-2 text-sm text-ink outline-none transition focus:border-orange focus:ring-2 focus:ring-orange/20"
+                />
+              </div>
+            </div>
+          )}
+
           {shortenError && <p className="mt-2 text-sm text-red-600">{shortenError}</p>}
         </form>
 

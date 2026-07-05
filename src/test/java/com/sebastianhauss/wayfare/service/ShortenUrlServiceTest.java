@@ -3,6 +3,7 @@ package com.sebastianhauss.wayfare.service;
 import com.sebastianhauss.wayfare.dto.LinkResponse;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
+import com.sebastianhauss.wayfare.exception.AliasUnavailableException;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
 import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
@@ -77,6 +78,59 @@ class ShortenUrlServiceTest {
         assertThat(response.shortUrl()).isEqualTo("http://localhost:8080/5");
         assertThat(response.originalUrl()).isEqualTo("https://example.com/some/long/path");
         verify(shortUrlRepository, times(2)).save(any(ShortUrl.class));
+    }
+
+    @Test
+    void shorten_usesCustomAlias_whenProvided() {
+        when(shortUrlRepository.existsByShortCode("my-brand")).thenReturn(false);
+        ShortUrl saved = new ShortUrl();
+        saved.setId(5L);
+        saved.setShortCode("my-brand");
+        saved.setOriginalUrl("https://example.com");
+        when(shortUrlRepository.saveAndFlush(any(ShortUrl.class))).thenReturn(saved);
+
+        ShortenResponse response = shortenUrlService.shorten(
+                new ShortenRequest("https://example.com", "my-brand", null, null));
+
+        assertThat(response.shortCode()).isEqualTo("my-brand");
+        assertThat(response.shortUrl()).isEqualTo("http://localhost:8080/my-brand");
+        verify(shortUrlRepository, never()).save(any());
+    }
+
+    @Test
+    void shorten_throwsAliasUnavailable_whenAliasAlreadyTaken() {
+        when(shortUrlRepository.existsByShortCode("taken")).thenReturn(true);
+
+        assertThatThrownBy(() -> shortenUrlService.shorten(
+                new ShortenRequest("https://example.com", "taken", null, null)))
+                .isInstanceOf(AliasUnavailableException.class);
+
+        verify(shortUrlRepository, never()).save(any());
+        verify(shortUrlRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shorten_throwsAliasUnavailable_whenAliasIsReserved() {
+        assertThatThrownBy(() -> shortenUrlService.shorten(
+                new ShortenRequest("https://example.com", "API", null, null)))
+                .isInstanceOf(AliasUnavailableException.class);
+
+        verify(shortUrlRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void shorten_extendsGeneratedCode_whenItCollidesWithExistingAlias() {
+        ShortUrl saved = new ShortUrl();
+        saved.setId(5L);
+        saved.setOriginalUrl("https://example.com");
+        when(shortUrlRepository.save(any(ShortUrl.class))).thenReturn(saved);
+        // Base62(5) == "5" is squatted by a custom alias, so the code gets extended once.
+        when(shortUrlRepository.existsByShortCode(any())).thenReturn(true, false);
+
+        ShortenResponse response = shortenUrlService.shorten(new ShortenRequest("https://example.com"));
+
+        assertThat(response.shortCode()).startsWith("5");
+        assertThat(response.shortCode()).hasSizeGreaterThan(1);
     }
 
     @Test
