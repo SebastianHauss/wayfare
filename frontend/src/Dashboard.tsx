@@ -197,6 +197,24 @@ export function Dashboard({
           {shortenError && <p className="mt-2 text-sm text-red-600">{shortenError}</p>}
         </form>
 
+        {!user && (
+          <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-orange/20 bg-orange-light/20 px-4 py-3 text-sm text-ink sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-center sm:text-left">
+              <p className="font-medium">Sign up to unlock click statistics</p>
+              <p className="mt-0.5 text-xs text-ink-soft">
+                Track clicks over time, top referrers, countries, and devices. Without an account
+                your links still work, but they live only in this browser and aren’t tracked.
+              </p>
+            </div>
+            <button
+              onClick={onLoginClick}
+              className="shrink-0 self-center rounded-full bg-orange px-4 py-1.5 text-xs font-medium text-white transition hover:bg-ink"
+            >
+              Sign up
+            </button>
+          </div>
+        )}
+
         <div className="mb-3 mt-10 flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">My Links</h2>
           {links.length > 0 && (
@@ -212,18 +230,6 @@ export function Dashboard({
           <p className="rounded-2xl border border-dashed border-ink/15 bg-cream-card py-10 text-center text-sm text-ink-soft">
             No links yet — shorten your first one above.
           </p>
-        )}
-
-        {!loadingLinks && !user && links.length > 0 && (
-          <div className="mb-4 flex flex-col items-center justify-between gap-3 rounded-2xl border border-orange/20 bg-orange-light/20 px-4 py-3 text-center text-sm text-ink sm:flex-row sm:text-left">
-            <span>Sign up to track clicks and manage your links from anywhere.</span>
-            <button
-              onClick={onLoginClick}
-              className="shrink-0 rounded-full bg-orange px-4 py-1.5 text-xs font-medium text-white transition hover:bg-ink"
-            >
-              Sign up
-            </button>
-          </div>
         )}
 
         {!loadingLinks && links.length > 0 && (
