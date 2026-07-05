@@ -1,33 +1,59 @@
 # Wayfare
 
-> Wayfare finds the shortest path to where you're going.
+> A clean, full-stack URL shortener built as a portfolio project.
 
-Wayfare is a minimal link shortener for turning long URLs into clean, shareable
-links. It supports quick anonymous shortening, optional sign-in for managing
-saved links, click tracking, and QR-code downloads.
+Wayfare turns long URLs into short, shareable links with a polished dashboard,
+QR codes, click tracking, and optional account-based link management.
 
 [Open Wayfare](https://wyfr.link)
 
-![Wayfare dashboard](docs/wayfare-dashboard.png)
+![](docs/wayfare-dashboard.png)
 
-## What It Does
+## Highlights
 
-- Shorten long links into compact Wayfare URLs.
-- Use it without an account for quick one-off links.
-- Sign up with your email and a password (with email verification) to keep and manage your links.
-- Copy, remove, and organize saved links from a clean dashboard.
-- Track clicks on signed-in links.
-- Generate and download QR codes for any shortened link.
-- Pick a custom alias (vanity code) instead of a random one.
-- Create links that can expire by date or click count.
+- Shorten links without creating an account.
+- Anonymous users can keep a small local list for quick one-off links.
+- Signed-in users get unlimited saved links, custom aliases, stats, and analytics.
+- Generate QR codes for shortened links.
+- Create links with optional expiration by date or click count.
+- Manage links in a responsive dashboard with pagination and manual refresh.
+- Track clicks, referrers, countries, devices, and daily activity for saved links.
 
-## Why
+## Tech Stack
 
-Wayfare is built as a small, focused link-management tool: fast enough for
-throwaway links, but useful enough to keep around when you want a personal
-dashboard for links you care about.
+- Backend: Java 21, Spring Boot, Spring Security, Spring Data JPA
+- Data: PostgreSQL, Redis, Flyway migrations
+- Frontend: React, TypeScript, Vite, Tailwind CSS
+- Auth: email/password, JWT cookies, refresh tokens, email verification
+- Utilities: ZXing QR generation, click metadata parsing
 
-## Status
+## Local Development
 
-The app is live and usable. It is still intentionally small, with future room
-for richer analytics, custom domains, API access, and team/shared workspaces.
+Start Postgres and Redis:
+
+```bash
+docker compose up -d
+```
+
+Run the backend:
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Run the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend runs at `http://localhost:5173` and proxies API requests to
+`http://localhost:8080`.
+
+## Why This Project
+
+Wayfare is intentionally small but complete: it shows product thinking,
+authentication, persistence, caching, analytics, API design, and a user-facing
+React dashboard without hiding the core workflow behind unnecessary complexity.
