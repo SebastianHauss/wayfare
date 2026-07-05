@@ -17,6 +17,9 @@ export default {
     const backendUrl = new URL(url.pathname + url.search, env.BACKEND_URL);
     const proxied = new Request(backendUrl, request);
     proxied.headers.set('host', backendUrl.host);
+    proxied.headers.set('x-forwarded-host', url.host);
+    proxied.headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
+    proxied.headers.set('x-forwarded-port', url.protocol === 'https:' ? '443' : '80');
     return fetch(proxied, { redirect: 'manual' });
   },
 };

@@ -10,14 +10,24 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.oidc.authentication.OidcIdTokenValidator;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoderFactory;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -42,6 +52,28 @@ public class SecurityConfig {
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
+
+    @Bean
+    public JwtDecoderFactory<ClientRegistration> oidcJwtDecoderFactory() {
+        RestTemplate restTemplate = new RestTemplate();
+        restTemplate.getInterceptors().add((request, body, execution) -> {
+            request.getHeaders().set(HttpHeaders.USER_AGENT, "Wayfare OAuth verifier");
+            request.getHeaders().setAccept(List.of(MediaType.APPLICATION_JSON));
+            return execution.execute(request, body);
+        });
+
+        return clientRegistration -> {
+            NimbusJwtDecoder decoder = NimbusJwtDecoder
+                    .withJwkSetUri(clientRegistration.getProviderDetails().getJwkSetUri())
+                    .restOperations(restTemplate)
+                    .build();
+            OAuth2TokenValidator<Jwt> issuerValidator = JwtValidators
+                    .createDefaultWithIssuer(clientRegistration.getProviderDetails().getIssuerUri());
+            OAuth2TokenValidator<Jwt> idTokenValidator = new OidcIdTokenValidator(clientRegistration);
+            decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(issuerValidator, idTokenValidator));
+            return decoder;
+        };
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(
