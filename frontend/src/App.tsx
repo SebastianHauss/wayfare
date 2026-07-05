@@ -17,6 +17,10 @@ export default function App() {
   const [verifyToken, setVerifyToken] = useState<string | null>(readVerifyToken);
 
   useEffect(() => {
+    // Run the session check once on mount. When there's a verify token we skip
+    // it entirely and let verification sign the user in; re-running this on the
+    // token clearing would fire a redundant /me that can race the just-set auth
+    // cookie and wipe the freshly verified user back to logged-out.
     if (verifyToken) {
       setChecking(false);
       return;
@@ -26,7 +30,8 @@ export default function App() {
       .then(setUser)
       .catch(() => setUser(null))
       .finally(() => setChecking(false));
-  }, [verifyToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function clearVerifyUrl() {
     window.history.replaceState({}, '', '/');
