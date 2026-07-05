@@ -28,6 +28,7 @@ export function Dashboard({
   const [qrLink, setQrLink] = useState<LinkResponse | null>(null);
   const [scrollY, setScrollY] = useState(0);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState('');
 
@@ -101,7 +102,7 @@ export function Dashboard({
     setDeletingAccount(true);
     setDeleteAccountError('');
     try {
-      await api.deleteAccount();
+      await api.deleteAccount(deletePassword);
       onAccountDeleted();
     } catch (err) {
       setDeleteAccountError(err instanceof Error ? err.message : 'Something went wrong');
@@ -342,6 +343,14 @@ export function Dashboard({
                   working during the recovery window.
                 </p>
                 <form onSubmit={handleDeleteAccount} className="mt-3 space-y-2">
+                  <input
+                    type="password"
+                    required
+                    placeholder="Confirm your password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    className="w-full rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm text-ink outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                  />
                   {deleteAccountError && <p className="text-xs text-red-600">{deleteAccountError}</p>}
                   <div className="flex gap-2 pt-1">
                     <button
@@ -355,6 +364,7 @@ export function Dashboard({
                       type="button"
                       onClick={() => {
                         setShowDeleteAccount(false);
+                        setDeletePassword('');
                         setDeleteAccountError('');
                       }}
                       className="rounded-full px-4 py-1.5 text-xs text-ink-soft transition hover:text-ink"

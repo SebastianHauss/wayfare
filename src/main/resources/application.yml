@@ -14,16 +14,3 @@ spring:
     client:
       connect-timeout: 5s
       read-timeout: 5s
-
-  security:
-    oauth2:
-      client:
-        registration:
-          google:
-            client-id: ${GOOGLE_CLIENT_ID:273107400860-anouama75hb4fee1gocmh32kdid06a9r.apps.googleusercontent.com}
-            client-secret: ${GOOGLE_CLIENT_SECRET}
-            scope: openid, profile, email
-          github:
-            client-id: ${GITHUB_CLIENT_ID:disabled}
-            client-secret: ${GITHUB_CLIENT_SECRET:disabled}
-            scope: read:user, user:email

@@ -16,9 +16,11 @@ public class AuthCookieService {
 
     private final JwtService jwtService;
 
-    // Frontend and backend live on different domains, so these cookies must be
-    // SameSite=None to be sent on cross-origin fetches; CsrfHeaderFilter makes
-    // up for None disabling the browser's usual same-site CSRF protection.
+    // The browser only ever talks to the Cloudflare Worker origin, which
+    // reverse-proxies /api to the backend, so from the browser's point of view
+    // these are first-party cookies and SameSite=Lax is enough. Do NOT point the
+    // frontend straight at the backend origin (e.g. via VITE_API_BASE_URL) — that
+    // would make them cross-site and require SameSite=None.
     public void setAuthCookies(HttpServletResponse response, String accessToken, String refreshToken) {
         addCookie(response, ACCESS_TOKEN_COOKIE, accessToken, "/", jwtService.getAccessTokenExpirationSeconds());
         addCookie(response, REFRESH_TOKEN_COOKIE, refreshToken, REFRESH_TOKEN_PATH, jwtService.getRefreshTokenExpirationSeconds());
@@ -33,7 +35,7 @@ public class AuthCookieService {
         ResponseCookie cookie = ResponseCookie.from(name, value)
                 .httpOnly(true)
                 .secure(true)
-                .sameSite("None")
+                .sameSite("Lax")
                 .path(path)
                 .maxAge(maxAgeSeconds)
                 .build();

@@ -14,7 +14,7 @@ saved links, click tracking, and QR-code downloads.
 
 - Shorten long links into compact Wayfare URLs.
 - Use it without an account for quick one-off links.
-- Sign in with Google or GitHub to keep and manage your links.
+- Sign up with your email and a password (with email verification) to keep and manage your links.
 - Copy, remove, and organize saved links from a clean dashboard.
 - Track clicks on signed-in links.
 - Generate and download QR codes for any shortened link.

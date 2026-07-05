@@ -1,4 +1,4 @@
-import type { LinkResponse, MeResponse } from './types';
+import type { LinkResponse, MeResponse, MessageResponse } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const CSRF_HEADER = 'X-Requested-With';
@@ -15,10 +15,6 @@ export class ApiError extends Error {
     this.status = status;
     this.code = code;
   }
-}
-
-export function getOAuthUrl(provider: 'google' | 'github') {
-  return `${API_BASE_URL}/oauth2/authorization/${provider}`;
 }
 
 async function parseError(res: Response): Promise<{ message: string; code: string | null }> {
@@ -67,6 +63,43 @@ export async function logout(): Promise<void> {
   });
 }
 
+export function register(email: string, password: string): Promise<MessageResponse> {
+  return request<MessageResponse>('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+// The backend sets the auth cookies on success and returns the current user,
+// so these resolve to the signed-in user without a separate /me round-trip.
+export function login(email: string, password: string): Promise<MeResponse> {
+  return request<MeResponse>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function verifyEmail(token: string): Promise<MeResponse> {
+  return request<MeResponse>('/api/auth/verify-email', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function resendVerification(email: string): Promise<MessageResponse> {
+  return request<MessageResponse>('/api/auth/resend-verification', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function reactivate(email: string, password: string): Promise<MeResponse> {
+  return request<MeResponse>('/api/auth/reactivate', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
 export function getCurrentUser(): Promise<MeResponse> {
   return request<MeResponse>('/api/auth/me');
 }
@@ -97,8 +130,11 @@ export function getQrCodeUrl(link: LinkResponse): string {
   return `${link.shortUrl.replace(/\/$/, '')}/qr`;
 }
 
-export async function deleteAccount(): Promise<void> {
-  await request<void>('/api/auth/me', { method: 'DELETE' });
+export async function deleteAccount(password: string): Promise<void> {
+  await request<void>('/api/auth/me', {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
+  });
 }
 
 export function getAnonymousLinks(): LinkResponse[] {
