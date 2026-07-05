@@ -18,6 +18,8 @@ QR codes, click tracking, and optional account-based link management.
 - Create links with optional expiration by date or click count.
 - Manage links in a responsive dashboard with pagination and manual refresh.
 - Track clicks, referrers, countries, devices, and daily activity for saved links.
+- Screen every destination against the Google Safe Browsing API at shorten time,
+  rejecting known malware and phishing links before they can be created.
 
 ## Tech Stack
 
@@ -25,6 +27,7 @@ QR codes, click tracking, and optional account-based link management.
 - Data: PostgreSQL, Redis, Flyway migrations
 - Frontend: React, TypeScript, Vite, Tailwind CSS
 - Auth: email/password, JWT cookies, refresh tokens, email verification
+- Abuse prevention: Google Safe Browsing URL screening, per-IP rate limiting
 - Utilities: ZXing QR generation, click metadata parsing
 
 ## Local Development
