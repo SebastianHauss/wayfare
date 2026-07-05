@@ -8,5 +8,10 @@
   },
   "vars": {
     "BACKEND_URL": "https://wayfare-53b7.onrender.com"
+  },
+  // Ping the backend every 10 min so Render's free tier never idles out
+  // (it spins down after ~15 min). See the scheduled() handler in worker.ts.
+  "triggers": {
+    "crons": ["*/10 * * * *"]
   }
 }

@@ -35,4 +35,17 @@ export default {
     proxied.headers.set('x-forwarded-port', url.protocol === 'https:' ? '443' : '80');
     return fetch(proxied, { redirect: 'manual' });
   },
+
+  // Render's free tier spins the backend container down after ~15 min idle, so
+  // the next visitor eats a 15s+ cold start (and the page waits on it). This
+  // cron keeps it warm. We hit a short-code lookup for a code that won't exist:
+  // it walks Redis (Upstash) then Postgres (Neon) before returning 404, so a
+  // single cheap request warms the app tier and both backing stores at once.
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      fetch(new URL('/_keepalive', env.BACKEND_URL), {
+        headers: { 'user-agent': 'wayfare-keepalive' },
+      }).catch(() => {}),
+    );
+  },
 };

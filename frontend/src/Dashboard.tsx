@@ -33,8 +33,12 @@ export function Dashboard({
   const [deleteAccountError, setDeleteAccountError] = useState('');
 
   useEffect(() => {
+    // Re-run when the auth state resolves: the app renders this optimistically
+    // as anonymous, so once /me comes back (or the user logs in/out) we swap
+    // between anonymous localStorage links and the signed-in user's links.
     loadLinks();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   useEffect(() => {
     const onScroll = () => setScrollY(window.scrollY);
