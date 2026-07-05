@@ -93,6 +93,20 @@ export function resendVerification(email: string): Promise<MessageResponse> {
   });
 }
 
+export function forgotPassword(email: string): Promise<MessageResponse> {
+  return request<MessageResponse>('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(token: string, password: string): Promise<MessageResponse> {
+  return request<MessageResponse>('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, password }),
+  });
+}
+
 export function reactivate(email: string, password: string): Promise<MeResponse> {
   return request<MeResponse>('/api/auth/reactivate', {
     method: 'POST',

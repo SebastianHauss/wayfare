@@ -3,16 +3,19 @@ package com.sebastianhauss.wayfare.service;
 import com.sebastianhauss.wayfare.dto.AuthResponse;
 import com.sebastianhauss.wayfare.dto.AuthResult;
 import com.sebastianhauss.wayfare.dto.DeleteAccountRequest;
+import com.sebastianhauss.wayfare.dto.ForgotPasswordRequest;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
 import com.sebastianhauss.wayfare.dto.MeResponse;
 import com.sebastianhauss.wayfare.dto.MessageResponse;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
 import com.sebastianhauss.wayfare.dto.ResendVerificationRequest;
+import com.sebastianhauss.wayfare.dto.ResetPasswordRequest;
 import com.sebastianhauss.wayfare.dto.VerifyEmailRequest;
 import com.sebastianhauss.wayfare.exception.AccountDeletedException;
 import com.sebastianhauss.wayfare.exception.EmailAlreadyInUseException;
 import com.sebastianhauss.wayfare.exception.EmailNotVerifiedException;
 import com.sebastianhauss.wayfare.exception.InvalidCredentialsException;
+import com.sebastianhauss.wayfare.exception.InvalidPasswordResetTokenException;
 import com.sebastianhauss.wayfare.exception.InvalidRefreshTokenException;
 import com.sebastianhauss.wayfare.exception.InvalidVerificationTokenException;
 import com.sebastianhauss.wayfare.exception.ReactivationNotAllowedException;
@@ -39,6 +42,7 @@ import java.time.temporal.ChronoUnit;
 public class AuthService {
 
     private static final int VERIFICATION_TOKEN_VALIDITY_HOURS = 24;
+    private static final int PASSWORD_RESET_TOKEN_VALIDITY_HOURS = 1;
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -179,6 +183,40 @@ public class AuthService {
             userRepository.save(user);
             emailService.sendVerificationEmail(user.getEmail(), token);
         });
+    }
+
+    @Transactional
+    public void forgotPassword(ForgotPasswordRequest request) {
+        userRepository.findByEmail(request.email()).ifPresent(user -> {
+            if (user.getDeletedAt() != null) {
+                return;
+            }
+            String token = generateVerificationToken();
+            user.setPasswordResetToken(token);
+            user.setPasswordResetTokenExpiresAt(Instant.now().plus(PASSWORD_RESET_TOKEN_VALIDITY_HOURS, ChronoUnit.HOURS));
+            userRepository.save(user);
+            emailService.sendPasswordResetEmail(user.getEmail(), token);
+        });
+    }
+
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        User user = userRepository.findByPasswordResetToken(request.token())
+                .orElseThrow(() -> new InvalidPasswordResetTokenException("Invalid or expired password reset link"));
+        if (user.getPasswordResetTokenExpiresAt() == null || user.getPasswordResetTokenExpiresAt().isBefore(Instant.now())) {
+            throw new InvalidPasswordResetTokenException("Invalid or expired password reset link");
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setPasswordResetToken(null);
+        user.setPasswordResetTokenExpiresAt(null);
+        // Receiving the reset email proves ownership of the address, so a
+        // never-verified user is confirmed here too.
+        user.setEmailVerified(true);
+        userRepository.save(user);
+        // Invalidate every existing session so a stolen/old refresh token can't
+        // outlive the password change.
+        refreshTokenRepository.revokeAllByUserId(user.getId());
+        log.info("Reset password for user: {}", user.getId());
     }
 
     private String generateVerificationToken() {

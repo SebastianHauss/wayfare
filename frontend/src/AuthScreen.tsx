@@ -20,6 +20,8 @@ export function AuthScreen({
   const [canResendVerification, setCanResendVerification] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotStatus, setForgotStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,6 +84,33 @@ export function AuthScreen({
     }
   }
 
+  async function handleForgot(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotStatus('sending');
+    setError('');
+    try {
+      await api.forgotPassword(email);
+      setForgotStatus('sent');
+    } catch (err) {
+      setForgotStatus('idle');
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    }
+  }
+
+  function openForgot() {
+    setShowForgot(true);
+    setError('');
+    setForgotStatus('idle');
+    setCanReactivate(false);
+    setCanResendVerification(false);
+  }
+
+  function closeForgot() {
+    setShowForgot(false);
+    setForgotStatus('idle');
+    setError('');
+  }
+
   function switchMode(next: 'login' | 'register') {
     setMode(next);
     setError('');
@@ -100,7 +129,7 @@ export function AuthScreen({
   return (
     <div className="bg-radial-glow flex min-h-screen items-center justify-center bg-cream px-4 py-16">
       <div className="w-full max-w-sm animate-fade-in-up">
-        {onBack && !registeredEmail && (
+        {onBack && !registeredEmail && !showForgot && (
           <button
             onClick={onBack}
             className="mb-4 text-sm text-ink-soft transition hover:text-orange"
@@ -116,7 +145,55 @@ export function AuthScreen({
           <p className="mt-2 text-sm text-ink-soft">Enterprise-grade links, for one</p>
         </div>
 
-        {registeredEmail ? (
+        {showForgot ? (
+          <div className="rounded-3xl border border-ink/5 bg-cream-card p-8 shadow-xl shadow-orange/5">
+            {forgotStatus === 'sent' ? (
+              <div className="text-center">
+                <p className="text-sm font-medium text-ink">Check your email</p>
+                <p className="mt-2 text-sm text-ink-soft">
+                  If an account exists for <span className="font-medium text-ink">{email}</span>, we've sent a link to
+                  reset your password.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-center text-sm font-medium text-ink">Reset your password</p>
+                <p className="mt-2 text-center text-sm text-ink-soft">
+                  Enter your email and we'll send you a link to choose a new password.
+                </p>
+                <form onSubmit={handleForgot} className="mt-5 space-y-4">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full rounded-xl border border-ink/15 bg-cream px-3 py-2 text-sm text-ink outline-none transition focus:border-orange focus:ring-2 focus:ring-orange/20"
+                    />
+                  </div>
+                  {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
+                  <button
+                    type="submit"
+                    disabled={forgotStatus === 'sending'}
+                    className="w-full rounded-full bg-orange py-2.5 text-sm font-medium text-white shadow-md shadow-orange/20 transition hover:bg-ink hover:shadow-lg disabled:opacity-50"
+                  >
+                    {forgotStatus === 'sending' ? 'Sending…' : 'Send reset link'}
+                  </button>
+                </form>
+              </>
+            )}
+            <button
+              onClick={closeForgot}
+              className="mt-4 block w-full text-sm text-ink-soft transition hover:text-orange"
+            >
+              Back to log in
+            </button>
+          </div>
+        ) : registeredEmail ? (
           <div className="rounded-3xl border border-ink/5 bg-cream-card p-8 text-center shadow-xl shadow-orange/5">
             <p className="text-sm font-medium text-ink">Check your email</p>
             <p className="mt-2 text-sm text-ink-soft">
@@ -202,6 +279,15 @@ export function AuthScreen({
                     <EyeIcon off={showPassword} className="h-4 w-4" />
                   </button>
                 </div>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={openForgot}
+                    className="mt-2 block text-xs text-ink-soft transition hover:text-orange"
+                  >
+                    Forgot password?
+                  </button>
+                )}
               </div>
 
               {error && (
