@@ -14,6 +14,7 @@ import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
 import com.sebastianhauss.wayfare.model.ShortUrl;
 import com.sebastianhauss.wayfare.repository.ClickEventRepository;
 import com.sebastianhauss.wayfare.repository.ShortUrlRepository;
+import com.sebastianhauss.wayfare.repository.UserRepository;
 import com.sebastianhauss.wayfare.repository.projection.LabelCount;
 import com.sebastianhauss.wayfare.util.Base62Encoder;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ public class ShortenUrlService {
     private final ShortUrlRepository shortUrlRepository;
     private final ClickEventRepository clickEventRepository;
     private final RedisTemplate<String, String> redisTemplate;
+    private final UserRepository userRepository;
 
     private static final int STATS_WINDOW_DAYS = 30;
 
@@ -212,7 +214,10 @@ public class ShortenUrlService {
 
     private Long currentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null && authentication.getPrincipal() instanceof Long userId ? userId : null;
+        if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
+            return null;
+        }
+        return userRepository.existsById(userId) ? userId : null;
     }
 
     private boolean isExpired(ShortUrl entity) {
