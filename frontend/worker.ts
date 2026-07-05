@@ -47,6 +47,9 @@ export default {
 
     // Cloudflare exposes the visitor's country on request.cf (not as a header the
     // origin would otherwise see), so forward it explicitly for click analytics.
+    // Drop any client-supplied copy first so a forged value can't survive when
+    // cf.country is absent — the origin should only ever trust Cloudflare's geo-IP.
+    proxied.headers.delete('x-client-country');
     const country = (request as { cf?: { country?: string } }).cf?.country;
     if (country) {
       proxied.headers.set('x-client-country', country);
