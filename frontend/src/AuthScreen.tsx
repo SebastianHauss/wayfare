@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as api from './api';
 import type { MeResponse } from './types';
-import { EyeIcon } from './Icons';
+import { Eye, EyeSlash } from '@phosphor-icons/react';
 
 export function AuthScreen({
   onAuthenticated,
@@ -199,7 +199,7 @@ export function AuthScreen({
                     className="shrink-0 text-ink-soft/50 transition hover:text-orange"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    <EyeIcon off={showPassword} className="h-4 w-4" />
+                    {showPassword ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>

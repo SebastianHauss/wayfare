@@ -1,6 +1,7 @@
 package com.sebastianhauss.wayfare.controller;
 
 import com.sebastianhauss.wayfare.dto.LinkResponse;
+import com.sebastianhauss.wayfare.dto.LinkStatsResponse;
 import com.sebastianhauss.wayfare.service.ShortenUrlService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,11 @@ public class LinksController {
     @GetMapping
     public ResponseEntity<List<LinkResponse>> getMyLinks() {
         return ResponseEntity.ok(shortenUrlService.getMyLinks());
+    }
+
+    @GetMapping("/{code}/stats")
+    public ResponseEntity<LinkStatsResponse> getStats(@PathVariable String code) {
+        return ResponseEntity.ok(shortenUrlService.getLinkStats(code));
     }
 
     @DeleteMapping("/{code}")

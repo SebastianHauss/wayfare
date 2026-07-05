@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as api from './api';
+import { ChartBar, Check, Copy, QrCode, Trash } from '@phosphor-icons/react';
+import { LinkStatsModal } from './LinkStatsModal';
 import type { LinkResponse, MeResponse } from './types';
 
 const SHRINK_DISTANCE = 200;
@@ -26,6 +28,7 @@ export function Dashboard({
   const [shortenError, setShortenError] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [qrLink, setQrLink] = useState<LinkResponse | null>(null);
+  const [statsLink, setStatsLink] = useState<LinkResponse | null>(null);
   const [scrollY, setScrollY] = useState(0);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
@@ -250,39 +253,52 @@ export function Dashboard({
                     {new Date(link.createdAt).toLocaleDateString()}
                   </div>
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm">
+                <div className="flex shrink-0 items-center justify-end gap-1">
                   <button
                     onClick={() => handleCopy(link.shortUrl, link.shortCode)}
-                    className="rounded-full border border-ink/15 px-3 py-1 text-ink-soft transition hover:border-orange hover:text-orange"
+                    title={copiedCode === link.shortCode ? 'Copied' : 'Copy link'}
+                    aria-label={copiedCode === link.shortCode ? 'Copied' : 'Copy link'}
+                    className={`rounded-full border p-2 transition ${
+                      copiedCode === link.shortCode
+                        ? 'border-orange text-orange'
+                        : 'border-ink/15 text-ink-soft hover:border-orange hover:text-orange'
+                    }`}
                   >
-                    {copiedCode === link.shortCode ? 'Copied' : 'Copy'}
+                    {copiedCode === link.shortCode ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   </button>
                   <button
                     onClick={() => setQrLink(link)}
-                    className="rounded-full border border-ink/15 px-3 py-1 text-ink-soft transition hover:border-orange hover:text-orange"
+                    title="Show QR code"
+                    aria-label="Show QR code"
+                    className="rounded-full border border-ink/15 p-2 text-ink-soft transition hover:border-orange hover:text-orange"
                   >
-                    QR
+                    <QrCode className="h-4 w-4" />
                   </button>
-                  {user ? (
+                  {user && (
                     <button
-                      onClick={() => handleDelete(link.shortCode)}
-                      className="rounded-full px-3 py-1 text-ink-soft transition hover:text-red-600"
+                      onClick={() => setStatsLink(link)}
+                      title="View stats"
+                      aria-label="View stats"
+                      className="rounded-full border border-ink/15 p-2 text-ink-soft transition hover:border-orange hover:text-orange"
                     >
-                      Delete
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleRemoveAnonymous(link.shortCode)}
-                      className="rounded-full px-3 py-1 text-ink-soft transition hover:text-red-600"
-                    >
-                      Remove
+                      <ChartBar className="h-4 w-4" />
                     </button>
                   )}
+                  <button
+                    onClick={() => (user ? handleDelete(link.shortCode) : handleRemoveAnonymous(link.shortCode))}
+                    title={user ? 'Delete link' : 'Remove link'}
+                    aria-label={user ? 'Delete link' : 'Remove link'}
+                    className="rounded-full border border-transparent p-2 text-ink-soft transition hover:border-red-200 hover:text-red-600"
+                  >
+                    <Trash className="h-4 w-4" />
+                  </button>
                 </div>
               </li>
             ))}
           </ul>
         )}
+
+        {statsLink && <LinkStatsModal link={statsLink} onClose={() => setStatsLink(null)} />}
 
         {qrLink && (
           <div

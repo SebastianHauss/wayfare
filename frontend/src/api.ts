@@ -1,4 +1,4 @@
-import type { LinkResponse, MeResponse, MessageResponse } from './types';
+import type { LinkResponse, LinkStats, MeResponse, MessageResponse } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const CSRF_HEADER = 'X-Requested-With';
@@ -106,6 +106,10 @@ export function getCurrentUser(): Promise<MeResponse> {
 
 export function getMyLinks(): Promise<LinkResponse[]> {
   return request<LinkResponse[]>('/api/links');
+}
+
+export function getLinkStats(shortCode: string): Promise<LinkStats> {
+  return request<LinkStats>(`/api/links/${shortCode}/stats`);
 }
 
 interface ShortenApiResponse {

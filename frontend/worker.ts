@@ -33,6 +33,14 @@ export default {
     proxied.headers.set('x-forwarded-host', url.host);
     proxied.headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
     proxied.headers.set('x-forwarded-port', url.protocol === 'https:' ? '443' : '80');
+
+    // Cloudflare exposes the visitor's country on request.cf (not as a header the
+    // origin would otherwise see), so forward it explicitly for click analytics.
+    const country = (request as { cf?: { country?: string } }).cf?.country;
+    if (country) {
+      proxied.headers.set('x-client-country', country);
+    }
+
     return fetch(proxied, { redirect: 'manual' });
   },
 };
