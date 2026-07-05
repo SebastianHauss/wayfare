@@ -1,6 +1,6 @@
 # Wayfare
 
-> A clean, full-stack URL shortener built as a portfolio project.
+> A clean, full-stack URL shortener.
 
 Wayfare turns long URLs into short, shareable links with a polished dashboard,
 QR codes, click tracking, and optional account-based link management.
