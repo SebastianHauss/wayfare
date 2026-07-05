@@ -10,6 +10,14 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    // OAuth callback URLs are registered for the apex domain only (GitHub in
+    // particular allows just one), so www requests must not reach the backend
+    // with a different host or the provider rejects the redirect_uri.
+    if (url.hostname.startsWith('www.')) {
+      url.hostname = url.hostname.slice('www.'.length);
+      return Response.redirect(url.toString(), 301);
+    }
+
     if (url.pathname === '/auth/callback') {
       return env.ASSETS.fetch(new Request(new URL('/', request.url), request));
     }

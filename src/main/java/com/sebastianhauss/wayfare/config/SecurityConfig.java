@@ -10,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -57,7 +56,6 @@ public class SecurityConfig {
     public JwtDecoderFactory<ClientRegistration> oidcJwtDecoderFactory() {
         RestTemplate restTemplate = new RestTemplate();
         restTemplate.getInterceptors().add((request, body, execution) -> {
-            request.getHeaders().set(HttpHeaders.USER_AGENT, "Wayfare OAuth verifier");
             request.getHeaders().setAccept(List.of(MediaType.APPLICATION_JSON));
             return execution.execute(request, body);
         });
