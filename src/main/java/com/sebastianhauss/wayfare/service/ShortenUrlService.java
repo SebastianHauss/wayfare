@@ -45,6 +45,7 @@ public class ShortenUrlService {
     private final ClickEventRepository clickEventRepository;
     private final RedisTemplate<String, String> redisTemplate;
     private final UserRepository userRepository;
+    private final SafeBrowsingService safeBrowsingService;
 
     private static final int STATS_WINDOW_DAYS = 30;
 
@@ -59,6 +60,7 @@ public class ShortenUrlService {
         if (request.url().startsWith(baseUrl)) {
             throw new InvalidUrlException("Cannot shorten a URL that points back to this service");
         }
+        safeBrowsingService.verifySafe(request.url());
         String alias = request.alias();
         Long userId = currentUserId();
         if (alias != null && userId == null) {

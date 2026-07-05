@@ -9,6 +9,7 @@ import com.sebastianhauss.wayfare.exception.AuthenticationRequiredException;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
 import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
+import com.sebastianhauss.wayfare.exception.UnsafeUrlException;
 import com.sebastianhauss.wayfare.model.ShortUrl;
 import com.sebastianhauss.wayfare.repository.ClickEventRepository;
 import com.sebastianhauss.wayfare.repository.ShortUrlRepository;
@@ -37,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -60,17 +62,33 @@ class ShortenUrlServiceTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
 
+    @Mock
+    private SafeBrowsingService safeBrowsingService;
+
     private ShortenUrlService shortenUrlService;
 
     @BeforeEach
     void setUp() {
-        shortenUrlService = new ShortenUrlService(shortUrlRepository, clickEventRepository, redisTemplate, userRepository);
+        shortenUrlService = new ShortenUrlService(
+                shortUrlRepository, clickEventRepository, redisTemplate, userRepository, safeBrowsingService);
         ReflectionTestUtils.setField(shortenUrlService, "baseUrl", "http://localhost:8080");
     }
 
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void shorten_rejectsUrlFlaggedBySafeBrowsing() {
+        ShortenRequest request = new ShortenRequest("http://malware.example");
+        doThrow(new UnsafeUrlException("This URL was flagged as unsafe and can't be shortened"))
+                .when(safeBrowsingService).verifySafe("http://malware.example");
+
+        assertThatThrownBy(() -> shortenUrlService.shorten(request))
+                .isInstanceOf(UnsafeUrlException.class);
+
+        verify(shortUrlRepository, never()).save(any());
     }
 
     @Test

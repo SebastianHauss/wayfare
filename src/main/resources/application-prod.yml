@@ -31,6 +31,9 @@ app:
   # Shared secret the Cloudflare Worker sends on X-Origin-Auth. Blank disables
   # the check (local/dev); set it in the Render env to lock down the origin.
   origin-shared-secret: ${ORIGIN_SHARED_SECRET:}
+  # Google Safe Browsing key for screening destination URLs. Blank disables the
+  # check so shortening still works without it.
+  safe-browsing-api-key: ${GOOGLE_SAFE_BROWSING_API_KEY:}
 
 jwt:
   secret: ${JWT_SECRET}

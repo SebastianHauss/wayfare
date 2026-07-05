@@ -36,6 +36,13 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(ex.getMessage()));
     }
 
+    @ExceptionHandler(UnsafeUrlException.class)
+    public ResponseEntity<ErrorResponse> handleUnsafeUrl(UnsafeUrlException ex) {
+        log.warn("Unsafe URL rejected: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(ex.getMessage(), "UNSAFE_URL"));
+    }
+
     @ExceptionHandler(AliasUnavailableException.class)
     public ResponseEntity<ErrorResponse> handleAliasUnavailable(AliasUnavailableException ex) {
         log.warn("Custom alias rejected: {}", ex.getMessage());
