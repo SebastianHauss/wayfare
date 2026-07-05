@@ -18,7 +18,12 @@ export default {
       return Response.redirect(url.toString(), 301);
     }
 
-    if (url.pathname === '/auth/callback') {
+    // The SPA's client-side routes aren't files in dist/, so without this they
+    // would fall through and be proxied to the backend (where e.g. a bare
+    // /verify-email is misread as a short-link code). Serve the SPA shell for
+    // them instead so client-side routing can take over.
+    const SPA_ROUTES = new Set(['/auth/callback', '/verify-email']);
+    if (SPA_ROUTES.has(url.pathname)) {
       return env.ASSETS.fetch(new Request(new URL('/', request.url), request));
     }
 
