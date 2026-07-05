@@ -1,0 +1,26 @@
+meta {
+  name: Refresh Token
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/auth/refresh
+  body: none
+  auth: none
+}
+
+headers {
+  X-Requested-With: WayfareApp
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Rotates the session using the refresh_token cookie: the old refresh token is
+  revoked server-side and a fresh access/refresh cookie pair is set on the
+  response. Run Login first. Running this twice reuses the now-rotated cookie
+  and the second call succeeds with the new one.
+}

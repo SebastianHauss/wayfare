@@ -17,8 +17,8 @@ spring:
       ssl:
         enabled: ${REDIS_SSL_ENABLED:true}
 
-# Render terminates TLS at its proxy; without honoring X-Forwarded-Proto the
-# OAuth redirect_uri would be built as http:// and Google would reject it.
+# Render terminates TLS at its proxy; honoring X-Forwarded-* keeps Spring aware
+# that requests arrived over https when building absolute URLs.
 server:
   forward-headers-strategy: framework
 
@@ -26,6 +26,8 @@ app:
   base-url: ${APP_BASE_URL}
   allowed-origins: ${ALLOWED_ORIGINS}
   frontend-url: ${FRONTEND_URL:}
+  mail-from: ${MAIL_FROM:onboarding@resend.dev}
+  resend-api-key: ${RESEND_API_KEY:}
 
 jwt:
   secret: ${JWT_SECRET}

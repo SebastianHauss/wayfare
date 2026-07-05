@@ -22,7 +22,7 @@ class UserRepositoryTest {
     void findByEmail_returnsSavedUser() {
         User user = new User();
         user.setEmail("user@example.com");
-        user.setProvider("google");
+        user.setPasswordHash("hashed-password");
         repository.saveAndFlush(user);
 
         assertThat(repository.findByEmail("user@example.com")).isPresent();
@@ -39,16 +39,19 @@ class UserRepositoryTest {
 
         User oldDeleted = new User();
         oldDeleted.setEmail("old-deleted-repo-test@example.com");
+        oldDeleted.setPasswordHash("hashed-password");
         oldDeleted.setDeletedAt(cutoff.minusSeconds(10));
         repository.saveAndFlush(oldDeleted);
 
         User recentlyDeleted = new User();
         recentlyDeleted.setEmail("recently-deleted-repo-test@example.com");
+        recentlyDeleted.setPasswordHash("hashed-password");
         recentlyDeleted.setDeletedAt(cutoff.plusSeconds(10));
         repository.saveAndFlush(recentlyDeleted);
 
         User active = new User();
         active.setEmail("active-repo-test@example.com");
+        active.setPasswordHash("hashed-password");
         repository.saveAndFlush(active);
 
         List<User> result = repository.findByDeletedAtBefore(cutoff);

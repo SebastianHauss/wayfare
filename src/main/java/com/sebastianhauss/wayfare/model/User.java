@@ -20,11 +20,19 @@ public class User {
     @Column(length = 255, unique = true, nullable = false)
     private String email;
 
-    @Column(length = 32)
-    private String provider;
+    @Column(length = 60, nullable = false)
+    private String passwordHash;
 
     @CreationTimestamp
     private Instant createdAt;
 
     private Instant deletedAt;
+
+    @Column(nullable = false)
+    private boolean emailVerified = false;
+
+    @Column(length = 64, unique = true)
+    private String verificationToken;
+
+    private Instant verificationTokenExpiresAt;
 }

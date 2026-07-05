@@ -32,7 +32,7 @@ class RefreshTokenRepositoryTest {
     void setUp() {
         User user = new User();
         user.setEmail("refresh-token-repo-test@example.com");
-        user.setProvider("google");
+        user.setPasswordHash("hashed-password");
         userId = userRepository.saveAndFlush(user).getId();
     }
 
@@ -49,7 +49,7 @@ class RefreshTokenRepositoryTest {
     void revokeAllByUserId_revokesOnlyActiveTokensForThatUser() {
         User otherUser = new User();
         otherUser.setEmail("other-refresh-token-repo-test@example.com");
-        otherUser.setProvider("google");
+        otherUser.setPasswordHash("hashed-password");
         Long otherUserId = userRepository.saveAndFlush(otherUser).getId();
 
         repository.saveAndFlush(newToken(userId, "hash-active", false));
@@ -67,7 +67,7 @@ class RefreshTokenRepositoryTest {
     void deleteAllByUserId_removesAllTokensForThatUser_andLeavesOthersIntact() {
         User otherUser = new User();
         otherUser.setEmail("other-delete-refresh-token-repo-test@example.com");
-        otherUser.setProvider("google");
+        otherUser.setPasswordHash("hashed-password");
         Long otherUserId = userRepository.saveAndFlush(otherUser).getId();
 
         repository.saveAndFlush(newToken(userId, "hash-to-delete-1", false));
