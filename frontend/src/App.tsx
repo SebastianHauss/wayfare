@@ -12,24 +12,22 @@ function readVerifyToken(): string | null {
 
 export default function App() {
   const [user, setUser] = useState<MeResponse | null>(null);
-  const [checking, setChecking] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
   const [verifyToken, setVerifyToken] = useState<string | null>(readVerifyToken);
 
   useEffect(() => {
-    // Run the session check once on mount. When there's a verify token we skip
-    // it entirely and let verification sign the user in; re-running this on the
-    // token clearing would fire a redundant /me that can race the just-set auth
-    // cookie and wipe the freshly verified user back to logged-out.
-    if (verifyToken) {
-      setChecking(false);
-      return;
-    }
+    // Resolve the session in the background. We render the (anonymous) Dashboard
+    // immediately rather than blocking on this, so a slow or cold backend can't
+    // leave the page blank — if /me comes back authenticated we just fill in the
+    // user and the Dashboard reloads that user's links. When there's a verify
+    // token we skip the check entirely and let verification sign the user in;
+    // re-running it on token clearing would fire a redundant /me that can race
+    // the just-set auth cookie and wipe the freshly verified user back out.
+    if (verifyToken) return;
     api
       .getCurrentUser()
       .then(setUser)
-      .catch(() => setUser(null))
-      .finally(() => setChecking(false));
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -55,8 +53,6 @@ export default function App() {
       />
     );
   }
-
-  if (checking) return null;
 
   if (!user && showAuth) {
     return (
