@@ -1,13 +1,17 @@
 package com.sebastianhauss.wayfare.service;
 
+import com.sebastianhauss.wayfare.dto.ClickMetadata;
 import com.sebastianhauss.wayfare.dto.LinkResponse;
+import com.sebastianhauss.wayfare.dto.LinkStatsResponse;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
 import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
 import com.sebastianhauss.wayfare.model.ShortUrl;
+import com.sebastianhauss.wayfare.repository.ClickEventRepository;
 import com.sebastianhauss.wayfare.repository.ShortUrlRepository;
+import com.sebastianhauss.wayfare.repository.projection.LabelCount;
 import com.sebastianhauss.wayfare.util.Base62Encoder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +33,10 @@ import java.util.Optional;
 public class ShortenUrlService {
 
     private final ShortUrlRepository shortUrlRepository;
+    private final ClickEventRepository clickEventRepository;
     private final RedisTemplate<String, String> redisTemplate;
+
+    private static final int STATS_WINDOW_DAYS = 30;
 
     @Value("${app.base-url}")
     private String baseUrl;
@@ -53,12 +60,16 @@ public class ShortenUrlService {
         return new ShortenResponse(updated.getShortCode(), shortUrlString, updated.getOriginalUrl());
     }
 
-    @Transactional
     public String getUrl(String code) {
+        return getUrl(code, ClickMetadata.empty());
+    }
+
+    @Transactional
+    public String getUrl(String code, ClickMetadata metadata) {
         String hit = redisTemplate.opsForValue().get(code);
         if (hit != null) {
             log.debug("Cache hit for code={}", code);
-            shortUrlRepository.incrementClickCount(code);
+            registerClick(code, metadata);
             return hit;
         }
         Optional<ShortUrl> shortUrl = shortUrlRepository.findByShortCode(code);
@@ -73,7 +84,7 @@ public class ShortenUrlService {
             if (!hasExpiration) {
                 redisTemplate.opsForValue().set(code, originalUrl, Duration.ofHours(24));
             }
-            shortUrlRepository.incrementClickCount(code);
+            registerClick(code, metadata);
             return originalUrl;
         } else {
             log.warn("Short code not found: {}", code);
@@ -81,11 +92,44 @@ public class ShortenUrlService {
         }
     }
 
+    private void registerClick(String code, ClickMetadata metadata) {
+        shortUrlRepository.incrementClickCount(code);
+        clickEventRepository.recordClick(
+                code, metadata.referrerDomain(), metadata.country(), metadata.deviceType(), metadata.browser());
+    }
+
     @Transactional(readOnly = true)
     public List<LinkResponse> getMyLinks() {
         Long userId = currentUserId();
         return shortUrlRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
                 .map(this::toLinkResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public LinkStatsResponse getLinkStats(String code) {
+        Long userId = currentUserId();
+        ShortUrl link = shortUrlRepository.findByShortCodeAndUserId(code, userId)
+                .orElseThrow(() -> new ShortenCodeNotFoundException("Short code not found"));
+        Long linkId = link.getId();
+        Instant since = Instant.now().minus(Duration.ofDays(STATS_WINDOW_DAYS));
+
+        List<LinkStatsResponse.DailyCount> clicksByDay = clickEventRepository.clicksByDay(linkId, since).stream()
+                .map(d -> new LinkStatsResponse.DailyCount(d.getDay(), d.getCount()))
+                .toList();
+        long totalClicks = link.getClickCount() == null ? 0L : link.getClickCount();
+
+        return new LinkStatsResponse(
+                totalClicks,
+                clicksByDay,
+                toBuckets(clickEventRepository.topReferrers(linkId)),
+                toBuckets(clickEventRepository.topCountries(linkId)),
+                toBuckets(clickEventRepository.deviceBreakdown(linkId)));
+    }
+
+    private List<LinkStatsResponse.Bucket> toBuckets(List<LabelCount> rows) {
+        return rows.stream()
+                .map(r -> new LinkStatsResponse.Bucket(r.getLabel(), r.getCount()))
                 .toList();
     }
 

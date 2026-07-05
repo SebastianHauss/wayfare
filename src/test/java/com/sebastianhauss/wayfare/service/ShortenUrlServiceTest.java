@@ -7,6 +7,7 @@ import com.sebastianhauss.wayfare.exception.InvalidUrlException;
 import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
 import com.sebastianhauss.wayfare.model.ShortUrl;
+import com.sebastianhauss.wayfare.repository.ClickEventRepository;
 import com.sebastianhauss.wayfare.repository.ShortUrlRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +43,9 @@ class ShortenUrlServiceTest {
     private ShortUrlRepository shortUrlRepository;
 
     @Mock
+    private ClickEventRepository clickEventRepository;
+
+    @Mock
     private RedisTemplate<String, String> redisTemplate;
 
     @Mock
@@ -51,7 +55,7 @@ class ShortenUrlServiceTest {
 
     @BeforeEach
     void setUp() {
-        shortenUrlService = new ShortenUrlService(shortUrlRepository, redisTemplate);
+        shortenUrlService = new ShortenUrlService(shortUrlRepository, clickEventRepository, redisTemplate);
         ReflectionTestUtils.setField(shortenUrlService, "baseUrl", "http://localhost:8080");
     }
 

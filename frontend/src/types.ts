@@ -22,3 +22,21 @@ export interface ErrorResponse {
 export interface MessageResponse {
   message: string;
 }
+
+export interface StatBucket {
+  label: string;
+  count: number;
+}
+
+export interface DailyCount {
+  day: string;
+  count: number;
+}
+
+export interface LinkStats {
+  totalClicks: number;
+  clicksByDay: DailyCount[];
+  topReferrers: StatBucket[];
+  topCountries: StatBucket[];
+  devices: StatBucket[];
+}
