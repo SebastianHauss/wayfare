@@ -59,7 +59,15 @@ function BarList({ title, buckets, empty }: { title: string; buckets: StatBucket
   );
 }
 
-export function LinkStatsModal({ link, onClose }: { link: LinkResponse; onClose: () => void }) {
+export function LinkStatsModal({
+  link,
+  onClose,
+  onStatsLoaded,
+}: {
+  link: LinkResponse;
+  onClose: () => void;
+  onStatsLoaded?: (totalClicks: number) => void;
+}) {
   const [stats, setStats] = useState<LinkStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -68,7 +76,11 @@ export function LinkStatsModal({ link, onClose }: { link: LinkResponse; onClose:
     let active = true;
     api
       .getLinkStats(link.shortCode)
-      .then((s) => active && setStats(s))
+      .then((s) => {
+        if (!active) return;
+        setStats(s);
+        onStatsLoaded?.(s.totalClicks);
+      })
       .catch((e) => active && setError(e instanceof Error ? e.message : 'Failed to load stats'))
       .finally(() => active && setLoading(false));
     return () => {

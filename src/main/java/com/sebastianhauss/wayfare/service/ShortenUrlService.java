@@ -6,6 +6,7 @@ import com.sebastianhauss.wayfare.dto.LinkStatsResponse;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.exception.AliasUnavailableException;
+import com.sebastianhauss.wayfare.exception.AuthenticationRequiredException;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
 import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
@@ -54,6 +55,10 @@ public class ShortenUrlService {
             throw new InvalidUrlException("Cannot shorten a URL that points back to this service");
         }
         String alias = request.alias();
+        Long userId = currentUserId();
+        if (alias != null && userId == null) {
+            throw new AuthenticationRequiredException("Log in to use custom aliases");
+        }
         if (alias != null) {
             validateAliasAvailable(alias);
         }
@@ -62,7 +67,7 @@ public class ShortenUrlService {
         shortUrl.setOriginalUrl(request.url());
         shortUrl.setExpiresAt(request.expiresAt());
         shortUrl.setMaxClicks(request.maxClicks());
-        shortUrl.setUserId(currentUserId());
+        shortUrl.setUserId(userId);
 
         ShortUrl saved;
         if (alias != null) {

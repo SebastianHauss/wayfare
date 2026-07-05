@@ -4,6 +4,7 @@ import com.sebastianhauss.wayfare.dto.LinkResponse;
 import com.sebastianhauss.wayfare.dto.ShortenRequest;
 import com.sebastianhauss.wayfare.dto.ShortenResponse;
 import com.sebastianhauss.wayfare.exception.AliasUnavailableException;
+import com.sebastianhauss.wayfare.exception.AuthenticationRequiredException;
 import com.sebastianhauss.wayfare.exception.InvalidUrlException;
 import com.sebastianhauss.wayfare.exception.LinkExpiredException;
 import com.sebastianhauss.wayfare.exception.ShortenCodeNotFoundException;
@@ -82,6 +83,8 @@ class ShortenUrlServiceTest {
 
     @Test
     void shorten_usesCustomAlias_whenProvided() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
         when(shortUrlRepository.existsByShortCode("my-brand")).thenReturn(false);
         ShortUrl saved = new ShortUrl();
         saved.setId(5L);
@@ -98,7 +101,20 @@ class ShortenUrlServiceTest {
     }
 
     @Test
+    void shorten_throwsAuthenticationRequired_whenAnonymousUsesCustomAlias() {
+        assertThatThrownBy(() -> shortenUrlService.shorten(
+                new ShortenRequest("https://example.com", "my-brand", null, null)))
+                .isInstanceOf(AuthenticationRequiredException.class);
+
+        verify(shortUrlRepository, never()).existsByShortCode(any());
+        verify(shortUrlRepository, never()).save(any());
+        verify(shortUrlRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void shorten_throwsAliasUnavailable_whenAliasAlreadyTaken() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
         when(shortUrlRepository.existsByShortCode("taken")).thenReturn(true);
 
         assertThatThrownBy(() -> shortenUrlService.shorten(
@@ -111,6 +127,9 @@ class ShortenUrlServiceTest {
 
     @Test
     void shorten_throwsAliasUnavailable_whenAliasIsReserved() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(42L, null, java.util.List.of()));
+
         assertThatThrownBy(() -> shortenUrlService.shorten(
                 new ShortenRequest("https://example.com", "API", null, null)))
                 .isInstanceOf(AliasUnavailableException.class);
