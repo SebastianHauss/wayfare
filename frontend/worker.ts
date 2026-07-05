@@ -25,7 +25,7 @@ export default {
     // would fall through and be proxied to the backend (where e.g. a bare
     // /verify-email is misread as a short-link code). Serve the SPA shell for
     // them instead so client-side routing can take over.
-    const SPA_ROUTES = new Set(['/auth/callback', '/verify-email']);
+    const SPA_ROUTES = new Set(['/auth/callback', '/verify-email', '/reset-password']);
     if (SPA_ROUTES.has(url.pathname)) {
       return env.ASSETS.fetch(new Request(new URL('/', request.url), request));
     }

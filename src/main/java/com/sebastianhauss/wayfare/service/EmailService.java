@@ -55,4 +55,26 @@ public class EmailService {
             log.error("Failed to send verification email to {}: {}", toEmail, e.getMessage());
         }
     }
+
+    @Async
+    public void sendPasswordResetEmail(String toEmail, String token) {
+        String link = frontendUrl + "/reset-password?token=" + token;
+        String text = "We received a request to reset your Wayfare password. Click the link below to choose a new one:\n\n" + link
+                + "\n\nThis link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.";
+        try {
+            restClient.post()
+                    .uri("/emails")
+                    .header("Authorization", "Bearer " + resendApiKey)
+                    .body(Map.of(
+                            "from", mailFrom,
+                            "to", List.of(toEmail),
+                            "subject", "Reset your Wayfare password",
+                            "text", text))
+                    .retrieve()
+                    .toBodilessEntity();
+            log.info("Sent password reset email to {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send password reset email to {}: {}", toEmail, e.getMessage());
+        }
+    }
 }

@@ -4,16 +4,18 @@ import type { MeResponse } from './types';
 import { AuthScreen } from './AuthScreen';
 import { Dashboard } from './Dashboard';
 import { VerifyEmail } from './VerifyEmail';
+import { ResetPassword } from './ResetPassword';
 
-function readVerifyToken(): string | null {
-  if (window.location.pathname !== '/verify-email') return null;
+function readTokenForPath(path: string): string | null {
+  if (window.location.pathname !== path) return null;
   return new URLSearchParams(window.location.search).get('token');
 }
 
 export default function App() {
   const [user, setUser] = useState<MeResponse | null>(null);
   const [showAuth, setShowAuth] = useState(false);
-  const [verifyToken, setVerifyToken] = useState<string | null>(readVerifyToken);
+  const [verifyToken, setVerifyToken] = useState<string | null>(() => readTokenForPath('/verify-email'));
+  const [resetToken, setResetToken] = useState<string | null>(() => readTokenForPath('/reset-password'));
 
   useEffect(() => {
     // Resolve the session in the background. We render the (anonymous) Dashboard
@@ -36,6 +38,12 @@ export default function App() {
     setVerifyToken(null);
   }
 
+  function clearResetUrl() {
+    window.history.replaceState({}, '', '/');
+    setResetToken(null);
+    setShowAuth(true);
+  }
+
   async function handleLogout() {
     await api.logout();
     setUser(null);
@@ -52,6 +60,10 @@ export default function App() {
         onBack={clearVerifyUrl}
       />
     );
+  }
+
+  if (resetToken) {
+    return <ResetPassword token={resetToken} onBack={clearResetUrl} />;
   }
 
   if (!user && showAuth) {

@@ -2,11 +2,13 @@ package com.sebastianhauss.wayfare.controller;
 
 import com.sebastianhauss.wayfare.dto.AuthResult;
 import com.sebastianhauss.wayfare.dto.DeleteAccountRequest;
+import com.sebastianhauss.wayfare.dto.ForgotPasswordRequest;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
 import com.sebastianhauss.wayfare.dto.MeResponse;
 import com.sebastianhauss.wayfare.dto.MessageResponse;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
 import com.sebastianhauss.wayfare.dto.ResendVerificationRequest;
+import com.sebastianhauss.wayfare.dto.ResetPasswordRequest;
 import com.sebastianhauss.wayfare.dto.VerifyEmailRequest;
 import com.sebastianhauss.wayfare.security.AuthCookieService;
 import com.sebastianhauss.wayfare.service.AuthService;
@@ -45,6 +47,18 @@ public class AuthController {
     public ResponseEntity<MessageResponse> resendVerification(@RequestBody @Valid ResendVerificationRequest request) {
         authService.resendVerification(request);
         return ResponseEntity.ok(new MessageResponse("If an account exists for that email, a verification link has been sent."));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<MessageResponse> forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {
+        authService.forgotPassword(request);
+        return ResponseEntity.ok(new MessageResponse("If an account exists for that email, a password reset link has been sent."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<MessageResponse> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(new MessageResponse("Your password has been reset. You can now log in with your new password."));
     }
 
     @PostMapping("/login")

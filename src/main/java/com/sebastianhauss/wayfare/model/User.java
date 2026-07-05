@@ -35,4 +35,9 @@ public class User {
     private String verificationToken;
 
     private Instant verificationTokenExpiresAt;
+
+    @Column(length = 64, unique = true)
+    private String passwordResetToken;
+
+    private Instant passwordResetTokenExpiresAt;
 }

@@ -14,4 +14,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByDeletedAtBefore(Instant cutoff);
 
     Optional<User> findByVerificationToken(String verificationToken);
+
+    Optional<User> findByPasswordResetToken(String passwordResetToken);
 }

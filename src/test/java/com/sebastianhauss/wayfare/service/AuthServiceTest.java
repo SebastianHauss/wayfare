@@ -2,16 +2,19 @@ package com.sebastianhauss.wayfare.service;
 
 import com.sebastianhauss.wayfare.dto.AuthResult;
 import com.sebastianhauss.wayfare.dto.DeleteAccountRequest;
+import com.sebastianhauss.wayfare.dto.ForgotPasswordRequest;
 import com.sebastianhauss.wayfare.dto.LoginRequest;
 import com.sebastianhauss.wayfare.dto.MeResponse;
 import com.sebastianhauss.wayfare.dto.MessageResponse;
 import com.sebastianhauss.wayfare.dto.RegisterRequest;
 import com.sebastianhauss.wayfare.dto.ResendVerificationRequest;
+import com.sebastianhauss.wayfare.dto.ResetPasswordRequest;
 import com.sebastianhauss.wayfare.dto.VerifyEmailRequest;
 import com.sebastianhauss.wayfare.exception.AccountDeletedException;
 import com.sebastianhauss.wayfare.exception.EmailAlreadyInUseException;
 import com.sebastianhauss.wayfare.exception.EmailNotVerifiedException;
 import com.sebastianhauss.wayfare.exception.InvalidCredentialsException;
+import com.sebastianhauss.wayfare.exception.InvalidPasswordResetTokenException;
 import com.sebastianhauss.wayfare.exception.InvalidRefreshTokenException;
 import com.sebastianhauss.wayfare.exception.InvalidVerificationTokenException;
 import com.sebastianhauss.wayfare.exception.ReactivationNotAllowedException;
@@ -476,6 +479,88 @@ class AuthServiceTest {
         assertThat(user.getVerificationTokenExpiresAt()).isNull();
         assertThat(result.tokens().accessToken()).isEqualTo("access-token");
         assertThat(result.user().id()).isEqualTo(5L);
+    }
+
+    @Test
+    void forgotPassword_isNoop_whenEmailNotFound() {
+        when(userRepository.findByEmail("missing@example.com")).thenReturn(Optional.empty());
+
+        authService.forgotPassword(new ForgotPasswordRequest("missing@example.com"));
+
+        verify(emailService, never()).sendPasswordResetEmail(any(), any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void forgotPassword_isNoop_whenAccountDeleted() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        user.setDeletedAt(Instant.now());
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+
+        authService.forgotPassword(new ForgotPasswordRequest("user@example.com"));
+
+        verify(emailService, never()).sendPasswordResetEmail(any(), any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void forgotPassword_issuesTokenAndSendsEmail_whenActiveAccount() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(jwtService.generateOpaqueRefreshToken()).thenReturn("reset-token");
+
+        authService.forgotPassword(new ForgotPasswordRequest("user@example.com"));
+
+        assertThat(user.getPasswordResetToken()).isEqualTo("reset-token");
+        assertThat(user.getPasswordResetTokenExpiresAt()).isAfter(Instant.now());
+        verify(userRepository).save(user);
+        verify(emailService).sendPasswordResetEmail("user@example.com", "reset-token");
+    }
+
+    @Test
+    void resetPassword_throws_whenTokenNotFound() {
+        when(userRepository.findByPasswordResetToken("bad-token")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest("bad-token", "newpassword123")))
+                .isInstanceOf(InvalidPasswordResetTokenException.class);
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void resetPassword_throws_whenTokenExpired() {
+        User user = new User();
+        user.setId(5L);
+        user.setPasswordResetToken("expired-token");
+        user.setPasswordResetTokenExpiresAt(Instant.now().minusSeconds(60));
+        when(userRepository.findByPasswordResetToken("expired-token")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.resetPassword(new ResetPasswordRequest("expired-token", "newpassword123")))
+                .isInstanceOf(InvalidPasswordResetTokenException.class);
+        verify(userRepository, never()).save(any());
+        verify(refreshTokenRepository, never()).revokeAllByUserId(any());
+    }
+
+    @Test
+    void resetPassword_updatesPasswordAndRevokesTokens_whenTokenValid() {
+        User user = new User();
+        user.setId(5L);
+        user.setEmail("user@example.com");
+        user.setEmailVerified(false);
+        user.setPasswordResetToken("good-token");
+        user.setPasswordResetTokenExpiresAt(Instant.now().plusSeconds(3600));
+        when(userRepository.findByPasswordResetToken("good-token")).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("newpassword123")).thenReturn("new-hash");
+
+        authService.resetPassword(new ResetPasswordRequest("good-token", "newpassword123"));
+
+        assertThat(user.getPasswordHash()).isEqualTo("new-hash");
+        assertThat(user.getPasswordResetToken()).isNull();
+        assertThat(user.getPasswordResetTokenExpiresAt()).isNull();
+        assertThat(user.isEmailVerified()).isTrue();
+        verify(userRepository).save(user);
+        verify(refreshTokenRepository).revokeAllByUserId(5L);
     }
 
     @Test
