@@ -4,6 +4,63 @@ import { ArrowClockwise, CaretLeft, CaretRight, ChartBar, Check, Copy, QrCode, T
 import { LinkStatsModal } from './LinkStatsModal';
 import type { LinkResponse, MeResponse } from './types';
 
+async function copyToClipboard(text: string): Promise<boolean> {
+  const isIOSLike =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  // Preferred path: async Clipboard API (requires a secure context).
+  if (!isIOSLike && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through to the legacy fallback below.
+    }
+  }
+
+  // Fallback for mobile / in-app browsers where the Clipboard API is
+  // unavailable or blocked (e.g. non-secure context, older WebViews).
+  const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const selection = document.getSelection();
+  const selectedRanges: Range[] = [];
+  if (selection) {
+    for (let i = 0; i < selection.rangeCount; i += 1) {
+      selectedRanges.push(selection.getRangeAt(i));
+    }
+  }
+
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('aria-hidden', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-1000px';
+    textarea.style.left = '0';
+    textarea.style.width = '1px';
+    textarea.style.height = '1px';
+    textarea.style.padding = '0';
+    textarea.style.border = '0';
+    textarea.style.fontSize = '16px';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus({ preventScroll: true });
+    textarea.select();
+    textarea.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  } finally {
+    if (selection) {
+      selection.removeAllRanges();
+      selectedRanges.forEach((range) => selection.addRange(range));
+    }
+    activeElement?.focus({ preventScroll: true });
+  }
+}
+
 const LINKS_PAGE_SIZE = 10;
 const SHRINK_DISTANCE = 200;
 const TITLE_MAX = 64;
@@ -83,13 +140,11 @@ export function Dashboard({
     // Re-run when the auth state resolves: the app renders this optimistically
     // as anonymous, so once /me comes back (or the user logs in/out) we swap
     // between anonymous localStorage links and the signed-in user's links.
-    loadLinks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
     setQrLink(null);
     setStatsLink(null);
     setLinksPage(0);
     loadLinks(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   useEffect(() => {
@@ -185,8 +240,9 @@ export function Dashboard({
     setLinks(api.removeAnonymousLink(shortCode));
   }
 
-  function handleCopy(shortUrl: string, shortCode: string) {
-    navigator.clipboard.writeText(shortUrl);
+  async function handleCopy(shortUrl: string, shortCode: string) {
+    const copied = await copyToClipboard(shortUrl);
+    if (!copied) return;
     setCopiedCode(shortCode);
     setTimeout(() => setCopiedCode((c) => (c === shortCode ? null : c)), 1500);
   }
