@@ -37,6 +37,16 @@ export default {
     proxied.headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
     proxied.headers.set('x-forwarded-port', url.protocol === 'https:' ? '443' : '80');
 
+    // The backend rate limiter keys on X-Forwarded-For, so pin it to Cloudflare's
+    // view of the real client IP and drop any client-supplied value — otherwise a
+    // caller could rotate the header to defeat the limit.
+    const clientIp = request.headers.get('cf-connecting-ip');
+    if (clientIp) {
+      proxied.headers.set('x-forwarded-for', clientIp);
+    } else {
+      proxied.headers.delete('x-forwarded-for');
+    }
+
     // Prove to the origin that this request came through the Worker. The origin
     // rejects anything without it, so the trust headers below can't be forged by
     // hitting the backend directly. Client-supplied copies are overwritten here.
