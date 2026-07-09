@@ -70,14 +70,16 @@ export default {
 
   // Render's free tier spins the backend container down after ~15 min idle, so
   // the next visitor eats a 15s+ cold start (and the page waits on it). This
-  // cron keeps it warm. We hit a short-code lookup for a code that won't exist:
-  // it walks Redis (Upstash) then Postgres (Neon) before returning 404, so a
-  // single cheap request warms the app tier and both backing stores at once.
+  // cron keeps the app tier warm by pinging the backend's liveness endpoint.
+  // The origin rejects anything without the shared secret (see OriginAuthFilter),
+  // so we must send it here just like the proxy path above does.
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const headers: Record<string, string> = { 'user-agent': 'wayfare-keepalive' };
+    if (env.ORIGIN_SHARED_SECRET) {
+      headers['x-origin-auth'] = env.ORIGIN_SHARED_SECRET;
+    }
     ctx.waitUntil(
-      fetch(new URL('/_keepalive', env.BACKEND_URL), {
-        headers: { 'user-agent': 'wayfare-keepalive' },
-      }).catch(() => {}),
+      fetch(new URL('/_keepalive', env.BACKEND_URL), { headers }).catch(() => {}),
     );
   },
 };

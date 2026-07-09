@@ -51,6 +51,7 @@ public class SecurityConfig {
                                 "/api/auth/forgot-password", "/api/auth/reset-password")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/shorten").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/_keepalive").permitAll()
                         .requestMatchers("/{code}", "/{code}/qr").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions.defaultAuthenticationEntryPointFor(

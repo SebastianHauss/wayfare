@@ -1,0 +1,10 @@
+# Short codes live at the root (e.g. /abc123) alongside the landing page, so we
+# allow only the exact homepage and the built JS/CSS it needs to render, and
+# disallow everything else — short links stay unindexed. Crawlers that don't
+# support Allow/$ simply fall back to Disallow: / (over-blocks, never leaks).
+User-agent: *
+Allow: /$
+Allow: /assets/
+Disallow: /
+
+Sitemap: https://wyfr.link/sitemap.xml
